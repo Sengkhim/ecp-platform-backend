@@ -1,0 +1,9 @@
+@Host = http://localhost:5108/
+
+GET {{Host}}/orders
+Accept: application/json
+
+###
+
+GET {{Host}}/push
+Accept: application/json

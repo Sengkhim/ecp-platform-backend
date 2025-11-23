@@ -1,0 +1,6 @@
+@host = http://localhost:5136
+
+GET {{host}}/orders
+Accept: application/json
+
+###
