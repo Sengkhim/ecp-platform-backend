@@ -6,7 +6,7 @@ namespace ECP.Saga.Orchestrator.Activities;
 
 public class PaymentRequestActivity(
     ILogger<OrderActivity> logger,
-    ITopicProducer<ProcessPaymentRequest> producer) : IStateMachineActivity<OrderState>
+    ITopicProducer<ProcessPayment> producer) : IStateMachineActivity<OrderState>
 {
     public void Probe(ProbeContext context) => context.CreateScope("payment-request-activity");
 
@@ -18,7 +18,14 @@ public class PaymentRequestActivity(
         try
         {
             var orderId = context.Instance.CorrelationId;
-            await producer.Produce(new ProcessPaymentRequest(orderId, context.Saga.Amount));
+            // var amount = context.Saga.Amount;
+            const string currency = "USD";
+            const string paymentType = "AMK";
+
+            var payment = new ProcessPayment(orderId,50, currency, paymentType);
+            
+            await producer.Produce(payment);
+            
             logger.LogInformation("Staring payment request {OrderId}", orderId);
         }
         catch (Exception ex)
@@ -38,7 +45,14 @@ public class PaymentRequestActivity(
         try
         {
             var orderId = context.Instance.CorrelationId;
-            await producer.Produce(new ProcessPaymentRequest(orderId, context.Saga.Amount));
+            // var amount = context.Instance.Amount;
+            const string currency = "USD";
+            const string paymentType = "AMK";
+
+            var payment = new ProcessPayment(orderId, 50, currency, paymentType);
+            
+            await producer.Produce(payment);
+            
             logger.LogInformation("Staring payment request {OrderId}", orderId);
         }
         catch (Exception ex)

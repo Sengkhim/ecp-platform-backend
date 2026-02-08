@@ -18,7 +18,14 @@ public class SendNotificationActivity(
         try
         {
             var orderId = context.Instance.CorrelationId;
-            await producer.Produce(new NotificationRequest(orderId, "Order Completed!"));
+            var customerId = Guid.NewGuid();
+            var message = "Order Created!";
+            var type = "OrderCreated";
+            
+            var notification = new NotificationRequest(orderId, customerId, message, type);
+            
+            await producer.Produce(notification);
+            
             logger.LogInformation("Notification sent for Order {OrderId}", orderId);
         }
         catch (Exception ex)
@@ -38,7 +45,14 @@ public class SendNotificationActivity(
         try
         {
             var orderId = context.Instance.CorrelationId;
-            await producer.Produce(new NotificationRequest(orderId, "Order Completed!"));
+            var customerId = Guid.NewGuid();
+            var message = "Order Created!";
+            var type = "OrderCreated";
+            
+            var notification = new NotificationRequest(orderId, customerId, message, type);
+            
+            await producer.Produce(notification);
+            
             logger.LogInformation("Notification sent for Order {OrderId}", orderId);
         }
         catch (Exception ex)

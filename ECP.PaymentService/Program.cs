@@ -20,8 +20,8 @@ builder.Services.AddMassTransit(x =>
         {
             k.Host("localhost:9092");
             
-            k.TopicEndpoint<ProcessPaymentRequest>(
-                "process-payment-request",
+            k.TopicEndpoint<ProcessPayment>(
+                "process-payment",
                 "orchestrator",
                 e =>
                 {

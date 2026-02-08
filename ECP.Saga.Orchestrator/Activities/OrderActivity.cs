@@ -9,11 +9,9 @@ public class OrderActivity(
     ITopicProducer<OrderFailed> producer)
     : IStateMachineActivity<OrderState>
 {
-    public void Probe(ProbeContext context)
-        => context.CreateScope("ordering");
+    public void Probe(ProbeContext context) => context.CreateScope("ordering");
 
-    public void Accept(StateMachineVisitor visitor)
-        => visitor.Visit(this);
+    public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 
     [Obsolete("Obsolete")]
     public async Task Execute(BehaviorContext<OrderState> context, IBehavior<OrderState> next)
@@ -21,7 +19,15 @@ public class OrderActivity(
         try
         {
             var orderId = context.Instance.CorrelationId;
-            await producer.Produce(new OrderFailed(orderId, "Order failed!"));
+            var reason = string.Empty;
+            var failStep = string.Empty;
+            var timestamp = DateTime.Now;
+
+            var orderFailed = new OrderFailed(
+                orderId, reason, failStep, timestamp);
+            
+            await producer.Produce(orderFailed);
+            
             logger.LogInformation("Order fail sent for Order {OrderId}", orderId);
         }
         catch (Exception ex)
@@ -41,7 +47,15 @@ public class OrderActivity(
         try
         {
             var orderId = context.Instance.CorrelationId;
-            await producer.Produce(new OrderFailed(orderId, "Order failed!"));
+            var reason = string.Empty;
+            var failStep = string.Empty;
+            var timestamp = DateTime.Now;
+
+            var orderFailed = new OrderFailed(
+                orderId, reason, failStep, timestamp);
+            
+            await producer.Produce(orderFailed);
+            
             logger.LogInformation("Order fail sent for Order {OrderId}", orderId);
         }
         catch (Exception ex)

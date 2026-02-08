@@ -1,4 +1,5 @@
 using Contracts;
+using ECP.OrderService.Application.Contracts.Events;
 using ECP.Saga.Orchestrator.StateData;
 using MassTransit;
 
@@ -36,8 +37,8 @@ public static class KafkaServiceExtension
 
     private static void KafkaConfigure(this IRiderRegistrationConfigurator rider)
     {
-        rider.AddProducer<ProcessPaymentRequest>("process-payment-request");
-        rider.AddProducer<CheckInventory>("check-inventory");
+        rider.AddProducer<ProcessPayment>("process-payment");
+        rider.AddProducer<CheckInventoryEvent>("check-inventory");
         rider.AddProducer<OrderFailed>("order-failed");
         rider.AddProducer<NotificationRequest>("notification-request");
         rider.AddConsumers(typeof(Program).Assembly);
@@ -56,7 +57,7 @@ public static class KafkaServiceExtension
         k.Host("localhost:9092");
 
         // 1. Order Created
-        k.TopicEndpoint<OrderCreated>("order-created", "orchestrator", e =>
+        k.TopicEndpoint<OrderCreatedEvent>("order-created", "orchestrator", e =>
         {
             e.AutoStart = true;
             e.CreateIfMissing(t => t.NumPartitions = 2); // Forces creation

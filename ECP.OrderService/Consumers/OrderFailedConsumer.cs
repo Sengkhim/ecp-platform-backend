@@ -10,6 +10,10 @@ public class OrderFailedConsumer(
     public async Task Consume(ConsumeContext<OrderFailed> context)
     {
         logger.LogInformation("Order Failed: {OrderId}", context.Message.OrderId);
-        await producer.Produce(new NotificationRequest(context.Message.OrderId, context.Message.Reason));
+
+        var customerId = Guid.NewGuid();
+        
+        await producer.Produce(
+            new NotificationRequest(context.Message.OrderId, customerId, context.Message.Reason, "MB"));
     }
 }
