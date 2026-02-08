@@ -24,8 +24,14 @@ builder.Services.AddMassTransit(x =>
                 "notification-service-group",
                 e =>
                 {
-                    e.ConfigureConsumer<NotificationConsumer>(context);
                     e.AutoOffsetReset = AutoOffsetReset.Earliest;
+                    e.AutoStart = true;
+                    e.CreateIfMissing(m => 
+                    {
+                        m.NumPartitions = 2;
+                        m.ReplicationFactor = 1;
+                    });
+                    e.ConfigureConsumer<NotificationConsumer>(context);
                 });
         });
     });

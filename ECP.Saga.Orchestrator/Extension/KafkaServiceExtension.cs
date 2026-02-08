@@ -54,38 +54,45 @@ public static class KafkaServiceExtension
         this IKafkaFactoryConfigurator k, IRiderRegistrationContext context)
     {
         k.Host("localhost:9092");
-        k.TopicEndpoint<OrderCreated>(
-            "order-created", "orchestrator", e =>
-            {
-                e.ConfigureSaga<OrderState>(context);
-            });
-                        
-        k.TopicEndpoint<InventoryReserved>(
-            "inventory-reserved", 
-            "orchestrator", e =>
-            {
-                e.ConfigureSaga<OrderState>(context);
-            });
-                    
-        k.TopicEndpoint<InventoryFailed>(
-            "inventory-failed", 
-            "orchestrator", e =>
-            {
-                e.ConfigureSaga<OrderState>(context);
-            });
-                    
-        k.TopicEndpoint<ProcessPayment>(
-            "process-payment", 
-            "orchestrator", e =>
-            {
-                e.ConfigureSaga<OrderState>(context);
-            });
-                    
-        k.TopicEndpoint<PaymentFailed>(
-            "payment-failed", 
-            "orchestrator", e =>
-            {
-                e.ConfigureSaga<OrderState>(context);
-            });
+
+        // 1. Order Created
+        k.TopicEndpoint<OrderCreated>("order-created", "orchestrator", e =>
+        {
+            e.AutoStart = true;
+            e.CreateIfMissing(t => t.NumPartitions = 2); // Forces creation
+            e.ConfigureSaga<OrderState>(context);
+        });
+
+        // 2. Inventory Reserved
+        k.TopicEndpoint<InventoryReserved>("inventory-reserved", "orchestrator", e =>
+        {
+            e.AutoStart = true;
+            e.CreateIfMissing(t => t.NumPartitions = 2);
+            e.ConfigureSaga<OrderState>(context);
+        });
+
+        // 3. Inventory Failed
+        k.TopicEndpoint<InventoryFailed>("inventory-failed", "orchestrator", e =>
+        {
+            e.AutoStart = true;
+            e.CreateIfMissing(t => t.NumPartitions = 2);
+            e.ConfigureSaga<OrderState>(context);
+        });
+
+        // 4. Process Payment
+        k.TopicEndpoint<ProcessPayment>("process-payment", "orchestrator", e =>
+        {
+            e.AutoStart = true;
+            e.CreateIfMissing(t => t.NumPartitions = 2);
+            e.ConfigureSaga<OrderState>(context);
+        });
+
+        // 5. Payment Failed
+        k.TopicEndpoint<PaymentFailed>("payment-failed", "orchestrator", e =>
+        {
+            e.AutoStart = true;
+            e.CreateIfMissing(t => t.NumPartitions = 2);
+            e.ConfigureSaga<OrderState>(context);
+        });
     }
 }

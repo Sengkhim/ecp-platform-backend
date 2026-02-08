@@ -1,3 +1,0 @@
-﻿<Project>
-  <Import Project="../buildMultiTargeting/ECP.Saga.Orchestrator.props" />
-</Project>

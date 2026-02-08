@@ -26,11 +26,19 @@ builder.Services.AddMassTransit(x =>
                 e =>
                 {
                     e.AutoOffsetReset = AutoOffsetReset.Earliest;
+                    e.AutoStart = true;
+                    // BEST SOLUTION: This forces MassTransit to create the topic on start
+                    e.CreateIfMissing(m => 
+                    {
+                        m.NumPartitions = 2;
+                        m.ReplicationFactor = 1;
+                    });
                     e.ConfigureConsumer<ProcessPaymentConsumer>(context);
                 });
         });
     });
 });
+
 
 var app = builder.Build();
 
