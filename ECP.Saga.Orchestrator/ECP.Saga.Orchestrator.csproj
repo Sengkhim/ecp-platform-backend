@@ -21,6 +21,7 @@
     <ItemGroup>
       <ProjectReference Include="..\Contracts\Contracts.csproj" />
       <ProjectReference Include="..\ECP.OrderService\ECP.OrderService.csproj" />
+      <ProjectReference Include="..\ECP.PaymentService\ECP.PaymentService.csproj" />
     </ItemGroup>
 
     <ItemGroup>
