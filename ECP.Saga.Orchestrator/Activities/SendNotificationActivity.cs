@@ -4,73 +4,55 @@ using MassTransit;
 
 namespace ECP.Saga.Orchestrator.Activities;
 
-public class SendNotificationActivity(
-    ITopicProducer<NotificationRequest> producer,
-    ILogger<SendNotificationActivity> logger) : IStateMachineActivity<OrderState>
+public class SendNotificationActivity :
+    IStateMachineActivity<OrderState, ProcessPayment>
 {
+    private readonly ITopicProducer<NotificationRequest> _producer;
+    private readonly ILogger<SendNotificationActivity> _logger;
+
+    public SendNotificationActivity(
+        ITopicProducer<NotificationRequest> producer,
+        ILogger<SendNotificationActivity> logger)
+    {
+        _producer = producer;
+        _logger = logger;
+    }
+
     public void Probe(ProbeContext context) => context.CreateScope("send-notification");
 
     public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 
-    [Obsolete("Obsolete")]
-    public async Task Execute(BehaviorContext<OrderState> context, IBehavior<OrderState> next)
+    public async Task Execute(
+        BehaviorContext<OrderState, ProcessPayment> context,
+        IBehavior<OrderState, ProcessPayment> next)
     {
-        try
-        {
-            var orderId = context.Instance.CorrelationId;
-            var customerId = Guid.NewGuid();
-            var message = "Order Created!";
-            var type = "OrderCreated";
-            
-            var notification = new NotificationRequest(orderId, customerId, message, type);
-            
-            await producer.Produce(notification);
-            
-            logger.LogInformation("Notification sent for Order {OrderId}", orderId);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to send notification");
-            throw;
-        }
+        var saga = context.Saga;
+
+        var notification = new NotificationRequest(
+            saga.OrderId,
+            saga.CustomerId,
+            $"Your order {saga.OrderNumber} has been successfully created.",
+            "OrderCompleted");
+
+        await _producer.Produce(notification);
+
+        _logger.LogInformation(
+            "Notification sent for Order {OrderId} to Customer {CustomerId}",
+            saga.OrderId,
+            saga.CustomerId);
 
         await next.Execute(context);
     }
 
-    [Obsolete("Obsolete")]
-    public async Task Execute<T>(
-        BehaviorContext<OrderState, T> context, 
-        IBehavior<OrderState, T> next) where T : class
+    public Task Faulted<TException>(
+        BehaviorExceptionContext<OrderState, ProcessPayment, TException> context,
+        IBehavior<OrderState, ProcessPayment> next)
+        where TException : Exception
     {
-        try
-        {
-            var orderId = context.Instance.CorrelationId;
-            var customerId = Guid.NewGuid();
-            var message = "Order Created!";
-            var type = "OrderCreated";
-            
-            var notification = new NotificationRequest(orderId, customerId, message, type);
-            
-            await producer.Produce(notification);
-            
-            logger.LogInformation("Notification sent for Order {OrderId}", orderId);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to send notification");
-            throw;
-        }
+        _logger.LogError(context.Exception,
+            "Notification failed for Order {OrderId}",
+            context.Saga.OrderId);
 
-        await next.Execute(context);
+        return next.Faulted(context);
     }
-
-    public async Task Faulted<TException>(
-        BehaviorExceptionContext<OrderState, TException> context, 
-        IBehavior<OrderState> next) where TException : Exception
-        => await next.Faulted(context);
-
-    public async Task Faulted<T, TException>(
-        BehaviorExceptionContext<OrderState, T, TException> context, 
-        IBehavior<OrderState, T> next) where T : class where TException : Exception
-        =>  await next.Faulted(context);
 }

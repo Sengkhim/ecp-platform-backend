@@ -8,6 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="JetBrains.Annotations" Version="2025.2.4" />
         <PackageReference Include="MassTransit" Version="8.5.2" />
         <PackageReference Include="MassTransit.EntityFrameworkCore" Version="8.5.2" />
         <PackageReference Include="MassTransit.Kafka" Version="8.5.2" />

@@ -18,9 +18,17 @@ namespace ECP.OrderService.Modules.Order;
 
         [MaxLength(500)]
         public string? Notes { get; set; }
+        
+        [Required]
+        [MaxLength(200)]
+        public string Currency { get; set; } = string.Empty;
+        
+        [Required]
+        [MaxLength(200)]
+        public string PaymentMethod { get; set; } = string.Empty;
 
         [Required]
-        public List<CreateOrderItemDto> Items { get; set; } = new();
+        public List<CreateOrderItemDto> Items { get; set; } = [];
 
         public CreateShippingAddressDto? ShippingAddress { get; set; }
     }

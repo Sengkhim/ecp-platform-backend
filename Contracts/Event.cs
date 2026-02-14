@@ -1,21 +1,5 @@
 namespace Contracts;
 
-// The Initial Event
-// public record OrderCreated(
-//     Guid OrderId, 
-//     Guid CustomerId,
-//     decimal Amount, 
-//     string ProductId, 
-//     int Quantity,
-//     DateTime CreatedAt);
-
-// Inventory Related
-// public record CheckInventory(
-//     Guid OrderId, 
-//     string ProductId, 
-//     int Quantity,
-//     DateTime Timestamp);
-
 public record InventoryReserved(
     Guid OrderId, 
     DateTime ExpiryDate);
@@ -39,14 +23,7 @@ public record PaymentFailed(
     string Reason, 
     DateTime FailureTime);
 
-
-// Orchestration / Final States
-// public record OrderCompleted(
-//     Guid OrderId, 
-//     Guid CustomerId,
-//     string OrderNumber,
-//     decimal TotalAmount,
-//     DateTime CompletedAt);
+public record RefundPayment(Guid OrderId, Guid PaymentId, decimal Amount, DateTime RefundTime);
 
 public record OrderFailed(
     Guid OrderId, 

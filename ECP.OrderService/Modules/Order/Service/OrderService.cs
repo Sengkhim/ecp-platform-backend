@@ -1,7 +1,6 @@
 using ECP.OrderService.Application.Contracts.Events;
 using ECP.OrderService.Domain.Entities;
 using ECP.OrderService.Infrastructure.Repositories;
-// using ECP.OrderService.Modules.Order.Messages;
 using MassTransit;
 
 namespace ECP.OrderService.Modules.Order.Service;
@@ -94,7 +93,9 @@ public class OrderService(
             CustomerEmail = createdOrder.CustomerEmail,
             TotalAmount = createdOrder.TotalAmount,
             CreatedAt = createdOrder.CreatedAt,
-
+            Currency = createOrderDto.Currency,
+            PaymentMethod =  createOrderDto.PaymentMethod,
+            
             Items = createdOrder.Items.Select(i => new OrderItemInfoEvent
             {
                 ProductId = i.ProductId,

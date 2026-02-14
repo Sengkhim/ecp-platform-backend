@@ -5,61 +5,58 @@ using MassTransit;
 
 namespace ECP.Saga.Orchestrator.Activities;
 
-public class CheckInventoryActivity(
-    ITopicProducer<CheckInventoryEvent> producer, ILogger<CheckInventoryActivity> logger) : IStateMachineActivity<OrderState>
+public class CheckInventoryActivity :
+    IStateMachineActivity<OrderState, OrderCreatedEvent>
 {
-    public void Probe(ProbeContext context) => context.CreateScope("CheckInventory");
+    private readonly ITopicProducer<CheckInventoryEvent> _producer;
+    private readonly ILogger<CheckInventoryActivity> _logger;
+
+    public CheckInventoryActivity(
+        ITopicProducer<CheckInventoryEvent> producer,
+        ILogger<CheckInventoryActivity> logger)
+    {
+        _producer = producer;
+        _logger = logger;
+    }
+
+    public void Probe(ProbeContext context) => context.CreateScope("check-inventory");
 
     public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 
-    [Obsolete("Obsolete")]
-    public async Task Execute(BehaviorContext<OrderState> context, IBehavior<OrderState> next)
+    public async Task Execute(
+        BehaviorContext<OrderState, OrderCreatedEvent> context,
+        IBehavior<OrderState, OrderCreatedEvent> next)
     {
-        try
-        {
-            var orderId = context.Instance.CorrelationId;
-            var items = JsonSerializer.Deserialize<List<OrderItemInfoEvent>>(context.Saga.Items);
-            
-            await producer.Produce(new CheckInventoryEvent(orderId, items));
-            
-            logger.LogInformation("Check Inventory {OrderId}", orderId);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Check Inventory.");
-            throw;
-        }
+        var saga = context.Saga;
+
+        var items = string.IsNullOrWhiteSpace(saga.Items)
+            ? []
+            : JsonSerializer.Deserialize<List<OrderItemInfoEvent>>(saga.Items)
+              ?? [];
+
+        var checkInventoryEvent = new CheckInventoryEvent(
+            saga.OrderId,
+            items);
+
+        await _producer.Produce(checkInventoryEvent);
+
+        _logger.LogInformation(
+            "Inventory check requested for Order {OrderId} with {ItemCount} items",
+            saga.OrderId,
+            items.Count);
 
         await next.Execute(context);
     }
 
-    [Obsolete("Obsolete")]
-    public async Task Execute<T>(
-        BehaviorContext<OrderState, T> context, IBehavior<OrderState, T> next) where T : class
+    public Task Faulted<TException>(
+        BehaviorExceptionContext<OrderState, OrderCreatedEvent, TException> context,
+        IBehavior<OrderState, OrderCreatedEvent> next)
+        where TException : Exception
     {
-        try
-        {
-            var orderId = context.Instance.CorrelationId;
-            var items = JsonSerializer.Deserialize<List<OrderItemInfoEvent>>(context.Saga.Items);
-            
-            await producer.Produce(new CheckInventoryEvent(orderId, items));
-            
-            logger.LogInformation("Check Inventory {OrderId}", orderId);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Check Inventory.");
-            throw;
-        }
+        _logger.LogError(context.Exception,
+            "Inventory check failed for Order {OrderId}",
+            context.Saga.OrderId);
 
-        await next.Execute(context);
+        return next.Faulted(context);
     }
-
-    public async Task Faulted<TException>(
-        BehaviorExceptionContext<OrderState, TException> context, 
-        IBehavior<OrderState> next) where TException : Exception => await next.Faulted(context);
-
-    public async Task Faulted<T, TException>(
-        BehaviorExceptionContext<OrderState, T, TException> context, 
-        IBehavior<OrderState, T> next) where T : class where TException : Exception => await next.Faulted(context);
 }

@@ -21,9 +21,36 @@ public class ProcessPaymentConsumer : IConsumer<ProcessPayment>
 
     public async Task Consume(ConsumeContext<ProcessPayment> context)
     {
-        _logger.LogInformation("💳 Payment completed for Order {MessageOrderId}", context.Message.OrderId);
-        await _producer.Produce(
-            new ProcessPayment(context.Message.OrderId, 34, "USD", "AMK"));
+        var message = context.Message;
+        var payment = new ProcessPayment(message.OrderId, message.Amount, message.Currency, message.PaymentMethod);
+        
+        _logger.LogInformation("💳Payment completed for Order {Payment}", payment.ToString());
+        
+        await _producer.Produce(payment);
         // await _failedProducer.Produce(new PaymentFailed(context.Message.OrderId, "R"));
     }
+    
+    // public async Task Consume(ConsumeContext<ProcessPayment> context)
+    // {
+    //     try
+    //     {
+    //         var payment = context.Message;
+    //
+    //         // Call payment gateway or internal logic
+    //         bool success = await ProcessPaymentGateway(payment);
+    //
+    //         if (success)
+    //         {
+    //             await _processedProducer.Produce(new PaymentProcessed(payment.OrderId));
+    //         }
+    //         else
+    //         {
+    //             await _failedProducer.Produce(new PaymentFailed(payment.OrderId, "Payment failed reason"));
+    //         }
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         await _failedProducer.Produce(new PaymentFailed(context.Message.OrderId, ex.Message));
+    //     }
+    // }
 }

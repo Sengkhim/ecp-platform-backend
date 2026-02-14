@@ -4,73 +4,63 @@ using MassTransit;
 
 namespace ECP.Saga.Orchestrator.Activities;
 
-public class PaymentRequestActivity(
-    ILogger<OrderActivity> logger,
-    ITopicProducer<ProcessPayment> producer) : IStateMachineActivity<OrderState>
+public class PaymentRequestActivity :
+    IStateMachineActivity<OrderState, InventoryReserved>
 {
-    public void Probe(ProbeContext context) => context.CreateScope("payment-request-activity");
+    private readonly ILogger<PaymentRequestActivity> _logger;
+    private readonly ITopicProducer<ProcessPayment> _producer;
+
+    public PaymentRequestActivity(
+        ILogger<PaymentRequestActivity> logger,
+        ITopicProducer<ProcessPayment> producer)
+    {
+        _logger = logger;
+        _producer = producer;
+    }
+
+    public void Probe(ProbeContext context) => context.CreateScope("payment-request");
 
     public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 
-    [Obsolete("Obsolete")]
-    public async Task Execute(BehaviorContext<OrderState> context, IBehavior<OrderState> next)
+    public async Task Execute(
+        BehaviorContext<OrderState, InventoryReserved> context,
+        IBehavior<OrderState, InventoryReserved> next)
     {
-        try
-        {
-            var orderId = context.Instance.CorrelationId;
-            // var amount = context.Saga.Amount;
-            const string currency = "USD";
-            const string paymentType = "AMK";
+        var saga = context.Saga;
 
-            var payment = new ProcessPayment(orderId,50, currency, paymentType);
-            
-            await producer.Produce(payment);
-            
-            logger.LogInformation("Staring payment request {OrderId}", orderId);
-        }
-        catch (Exception ex)
+        if (!saga.PaymentRequested)
         {
-            logger.LogError(ex, "Failed payment request!");
-            throw;
+            saga.PaymentRequested = true;
+
+            var paymentCommand = new ProcessPayment(
+                saga.OrderId,
+                saga.TotalAmount,
+                saga.Currency,
+                saga.PaymentMethod
+            );
+
+            await _producer.Produce(paymentCommand);
         }
+
+        _logger.LogInformation(
+            "Payment request sent for Order {OrderId}, Amount {Amount} {Currency}, Method {Method}",
+            saga.OrderId,
+            saga.TotalAmount,
+            saga.Currency,
+            saga.PaymentMethod);
 
         await next.Execute(context);
     }
 
-    [Obsolete("Obsolete")]
-    public async Task Execute<T>(
-        BehaviorContext<OrderState, T> context, 
-        IBehavior<OrderState, T> next) where T : class
+    public Task Faulted<TException>(
+        BehaviorExceptionContext<OrderState, InventoryReserved, TException> context,
+        IBehavior<OrderState, InventoryReserved> next)
+        where TException : Exception
     {
-        try
-        {
-            var orderId = context.Instance.CorrelationId;
-            // var amount = context.Instance.Amount;
-            const string currency = "USD";
-            const string paymentType = "AMK";
+        _logger.LogError(context.Exception,
+            "Payment request failed for Order {OrderId}",
+            context.Saga.OrderId);
 
-            var payment = new ProcessPayment(orderId, 50, currency, paymentType);
-            
-            await producer.Produce(payment);
-            
-            logger.LogInformation("Staring payment request {OrderId}", orderId);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed payment request!");
-            throw;
-        }
-
-        await next.Execute(context);
+        return next.Faulted(context);
     }
-
-    public async Task Faulted<TException>(
-        BehaviorExceptionContext<OrderState, TException> context, 
-        IBehavior<OrderState> next) where TException : Exception
-        => await next.Faulted(context);
-
-    public async Task Faulted<T, TException>(
-        BehaviorExceptionContext<OrderState, T, TException> context, 
-        IBehavior<OrderState, T> next) where T : class where TException : Exception
-        => await next.Faulted(context);
 }

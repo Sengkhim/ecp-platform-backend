@@ -27,6 +27,9 @@ public class OrderStateClassMap : BsonClassMap<OrderState>
         MapProperty(x => x.TotalAmount);
         MapProperty(x => x.CreatedAt);
         MapProperty(x => x.Version);
+        
+        MapProperty(x => x.PaymentMethod);
+        MapProperty(x => x.Currency);
 
         // Items stored as JSON string
         MapProperty(x => x.Items)
