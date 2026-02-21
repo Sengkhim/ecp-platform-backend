@@ -3,7 +3,6 @@ using System.Text.Json.Serialization;
 using Contracts;
 using ECP.OrderService.Application.Contracts.Events;
 using ECP.Saga.Orchestrator.Activities;
-// using ECP.Saga.Orchestrator.Contracts;
 using JetBrains.Annotations;
 using MassTransit;
 using Microsoft.Extensions.Logging;

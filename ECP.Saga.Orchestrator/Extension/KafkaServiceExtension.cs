@@ -132,15 +132,15 @@ public static class KafkaServiceExtension
             e.CreateIfMissing(t => t.NumPartitions = 2);
             e.ConfigureSaga<OrderState>(riderCtx);
         });
-
         // 6. Request Payment → ProcessPaymentConsumer (NOT the saga)
         // Command published by the saga to trigger payment processing.
         // Isolated in its own consumer group from the saga's orchestrator group.
-        k.TopicEndpoint<RequestPayment>("request-payment", "payment-processor", e =>
+        k.TopicEndpoint<RequestPayment>("request-payment", "orchestrator", e =>
         {
             e.AutoStart = true;
             e.CreateIfMissing(t => t.NumPartitions = 2);
-            e.ConfigureConsumer<ProcessPaymentConsumer>(riderCtx);
+            e.ConfigureSaga<OrderState>(riderCtx);
+            // e.ConfigureConsumer<ProcessPaymentConsumer>(riderCtx);
         });
     }
 }

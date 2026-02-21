@@ -69,7 +69,7 @@ public record PaymentTimeout
 /// to deduplicate re-submitted requests and return the original result without
 /// processing the charge again.
 /// </para>
-/// </summary>
+/// </summary>  
 public record RequestPayment(
     Guid    OrderId,
     Guid    CustomerId,

@@ -132,8 +132,7 @@ public sealed class PaymentRequestActivity :
 {
     // Fixed namespace for GuidV5 derivation — arbitrary but must never change.
     // Changing this would generate different keys for existing orders on replay.
-    private static readonly Guid PaymentNamespace =
-        new("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+    private static readonly Guid PaymentNamespace = new("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
 
     private readonly ITopicProducer<RequestPayment> _producer;
     private readonly ILogger<PaymentRequestActivity> _logger;
@@ -146,11 +145,9 @@ public sealed class PaymentRequestActivity :
         _logger   = logger;
     }
 
-    public void Probe(ProbeContext context)
-        => context.CreateScope("payment-request");
+    public void Probe(ProbeContext context) => context.CreateScope("payment-request");
 
-    public void Accept(StateMachineVisitor visitor)
-        => visitor.Visit(this);
+    public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 
     public async Task Execute(
         BehaviorContext<OrderState, InventoryReserved> context,
