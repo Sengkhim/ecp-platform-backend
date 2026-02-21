@@ -1,7 +1,6 @@
 using Contracts;
 using ECP.OrderService.Application.Contracts.Events;
 using ECP.PaymentService.Consumer;
-// using ECP.Saga.Orchestrator.Consumers;
 using ECP.Saga.Orchestrator.StateData;
 using MassTransit;
 
@@ -63,8 +62,7 @@ public static class KafkaServiceExtension
 
                 // riderCtx is IRiderRegistrationContext — it now knows about the
                 // saga and consumer because we registered them on the rider above.
-                rider.UsingKafka((riderCtx, k) =>
-                    ConfigureKafkaEndpoints(riderCtx, k));
+                rider.UsingKafka(ConfigureKafkaEndpoints);
             });
         });
     }
@@ -140,7 +138,6 @@ public static class KafkaServiceExtension
             e.AutoStart = true;
             e.CreateIfMissing(t => t.NumPartitions = 2);
             e.ConfigureSaga<OrderState>(riderCtx);
-            // e.ConfigureConsumer<ProcessPaymentConsumer>(riderCtx);
         });
     }
 }

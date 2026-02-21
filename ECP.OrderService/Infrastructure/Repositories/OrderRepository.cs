@@ -56,7 +56,7 @@ public class OrderRepository(OrderDbContext context)
         public async Task<OrderEntity> AddAsync(OrderEntity orderEntity, CancellationToken cancellationToken = default)
         {
             await context.Orders.AddAsync(orderEntity, cancellationToken);
-            // await context.SaveChangesAsync(cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
             return orderEntity;
         }
 
