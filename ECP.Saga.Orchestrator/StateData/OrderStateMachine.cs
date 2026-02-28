@@ -5,7 +5,6 @@ using ECP.OrderService.Application.Contracts.Events;
 using ECP.Saga.Orchestrator.Activities;
 using JetBrains.Annotations;
 using MassTransit;
-using Microsoft.Extensions.Logging;
 
 namespace ECP.Saga.Orchestrator.StateData;
 

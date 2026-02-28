@@ -67,3 +67,4 @@ volumes:
   mongodb-log:
     driver: local
     name: mongo-log
+
