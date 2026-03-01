@@ -43,27 +43,29 @@ public sealed class YarpConfigVerifier(
                         cluster.ClusterId, id, dest.Address);
         }
 
-        if (list.Count == 0)
-            logger.LogError("[YARP VERIFY] NO IProxyConfigProvider registered! YARP will return 404 for all requests.");
-
-        if (list.Count > 1)
-            logger.LogWarning(
-                "[YARP VERIFY] Multiple providers found — YARP uses the LAST one. " +
-                "Remove LoadFromMemory() and any duplicate registrations.");
+        switch (list.Count)
+        {
+            case 0:
+                logger.LogError("[YARP VERIFY] NO IProxyConfigProvider registered! YARP will return 404 for all requests.");
+                break;
+            case > 1:
+                logger.LogWarning(
+                    "[YARP VERIFY] Multiple providers found — YARP uses the LAST one. " +
+                    "Remove LoadFromMemory() and any duplicate registrations.");
+                break;
+        }
 
         var active = list.LastOrDefault();
-        if (active is not null)
-        {
-            var routes = active.GetConfig().Routes.Count;
-            if (routes == 0)
-                logger.LogWarning(
-                    "[YARP VERIFY] Active provider has 0 routes. " +
-                    "K8s watcher may still be connecting — wait a few seconds and check /debug/routes.");
-            else
-                logger.LogInformation(
-                    "[YARP VERIFY] OK — active provider '{Type}' has {Routes} route(s)",
-                    active.GetType().Name, routes);
-        }
+        if (active is null) return Task.CompletedTask;
+        var routes = active.GetConfig().Routes.Count;
+        if (routes == 0)
+            logger.LogWarning(
+                "[YARP VERIFY] Active provider has 0 routes. " +
+                "K8s watcher may still be connecting — wait a few seconds and check /debug/routes.");
+        else
+            logger.LogInformation(
+                "[YARP VERIFY] OK — active provider '{Type}' has {Routes} route(s)",
+                active.GetType().Name, routes);
 
         return Task.CompletedTask;
     }

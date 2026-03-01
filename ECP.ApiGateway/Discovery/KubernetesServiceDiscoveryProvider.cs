@@ -3,41 +3,9 @@ using k8s.Models;
 using Yarp.ReverseProxy.Configuration;
 using System.Collections.Concurrent;
 using ECP.ApiGateway.Configuration;
-using Microsoft.Extensions.Primitives;
 using Yarp.ReverseProxy.Forwarder;
 
 namespace ECP.ApiGateway.Discovery;
-
-/// <summary>
-/// A single immutable snapshot of routes + clusters.
-/// When YARP calls GetConfig(), it subscribes to the ChangeToken.
-/// Calling SignalChange() tells YARP to call GetConfig() again
-/// and reload its internal router with the new snapshot.
-/// </summary>
-public sealed class ProxyConfig : IProxyConfig
-{
-    private readonly CancellationTokenSource _cts = new();
-
-    public ProxyConfig(
-        IReadOnlyList<RouteConfig> routes,
-        IReadOnlyList<ClusterConfig> clusters)
-    {
-        Routes      = routes;
-        Clusters    = clusters;
-        ChangeToken = new CancellationChangeToken(_cts.Token);
-    }
-
-    public IReadOnlyList<RouteConfig>   Routes      { get; }
-    public IReadOnlyList<ClusterConfig> Clusters    { get; }
-    public IChangeToken                 ChangeToken { get; }
-
-    /// <summary>
-    /// Signal YARP that a new config snapshot is ready.
-    /// YARP will call IProxyConfigProvider.GetConfig() again and
-    /// rebuild its internal route table.
-    /// </summary>
-    public void SignalChange() => _cts.Cancel();
-}
 
 /// <summary>
 /// Watches Kubernetes Ingress resources and dynamically builds
@@ -93,7 +61,7 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
     private const string NginxCorsMethods    = "nginx.ingress.kubernetes.io/cors-allow-methods";
     private const string NginxCorsHeaders    = "nginx.ingress.kubernetes.io/cors-allow-headers";
 
-    private readonly IKubernetes _k8s;
+    private readonly IKubernetes _k8S;
     private readonly ILogger<KubernetesServiceDiscoveryProvider> _logger;
     private readonly string _namespace;
     private readonly string _ingressBaseUrl;
@@ -103,12 +71,13 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
     // Current snapshot — replaced atomically on every rebuild
     private ProxyConfig _current;
 
+    [Obsolete("Obsolete")]
     public KubernetesServiceDiscoveryProvider(
-        IKubernetes k8s,
+        IKubernetes k8S,
         ILogger<KubernetesServiceDiscoveryProvider> logger,
         IConfiguration configuration)
     {
-        _k8s            = k8s;
+        _k8S            = k8S;
         _logger         = logger;
         _namespace      = configuration["Kubernetes:Namespace"] ?? "weather-api";
         _ingressBaseUrl = configuration["Kubernetes:IngressBaseUrl"]
@@ -133,6 +102,7 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
 
     // ── Kubernetes Watcher ─────────────────────────────────────────────────
 
+    [Obsolete("Obsolete")]
     private async Task WatchIngressAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
@@ -143,7 +113,7 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
                     "Starting Kubernetes Ingress watcher — namespace: '{Namespace}'",
                     _namespace);
 
-                var response = _k8s.NetworkingV1
+                var response = _k8S.NetworkingV1
                     .ListNamespacedIngressWithHttpMessagesAsync(
                         _namespace, watch: true, cancellationToken: ct);
 
@@ -163,6 +133,11 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
                         case WatchEventType.Deleted:
                             _cache.TryRemove(key, out _);
                             break;
+                        case WatchEventType.Error:
+                        case WatchEventType.Bookmark:
+                            break;
+                        default:
+                            throw new ArgumentOutOfRangeException();
                     }
 
                     RebuildConfig();
@@ -250,20 +225,20 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
             var routeId     = $"route-{ingressName}";
 
             // ── transforms ─────────────────────────────────────────────────
-            var transforms = new List<IReadOnlyDictionary<string, string>>();
-
-            // Stop YARP forwarding client Host (localhost:5028) to upstream
-            transforms.Add(new Dictionary<string, string>
+            var transforms = new List<IReadOnlyDictionary<string, string>>
             {
-                ["RequestHeaderOriginalHost"] = "false"
-            });
-
-            // Set the correct Host nginx expects (analystservice.local)
-            transforms.Add(new Dictionary<string, string>
-            {
-                ["RequestHeader"] = "Host",
-                ["Set"]           = effectiveHost
-            });
+                // Stop YARP forwarding client Host (localhost:5028) to upstream
+                new Dictionary<string, string>
+                {
+                    ["RequestHeaderOriginalHost"] = "false"
+                },
+                // Set the correct Host nginx expects (analystservice.local)
+                new Dictionary<string, string>
+                {
+                    ["RequestHeader"] = "Host",
+                    ["Set"]           = effectiveHost
+                }
+            };
 
             // Strip gateway prefix before forwarding: /api/analyst/status → /status
             if (stripPrefix)
@@ -359,11 +334,7 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
                 "Registered route: {Route} → {Dest} (Host: {Host}) strip={Strip}",
                 routePath, destinationAddress, effectiveHost, stripPrefix);
         }
-
-        // ── ATOMIC SWAP + SIGNAL ───────────────────────────────────────────
-        // Build new snapshot, swap it in, then signal the OLD one.
-        // Signaling the OLD token tells YARP: "call GetConfig() again" —
-        // YARP will then receive the NEW snapshot and rebuild its router.
+        
         var newConfig = new ProxyConfig(routes, clusters);
         var oldConfig = Interlocked.Exchange(ref _current, newConfig);
         oldConfig.SignalChange();
@@ -372,7 +343,7 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
             "YARP config rebuilt — {Count} gateway-enabled ingress(es)", routes.Count);
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────
+    #region  Hepler method
 
     private string ResolveDestinationAddress(V1Ingress ingress, string? explicitUrl, string scheme)
     {
@@ -380,10 +351,10 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
             return explicitUrl.TrimEnd('/');
 
         var host = ExtractIngressRuleHost(ingress);
-        if (!string.IsNullOrWhiteSpace(host))
-            return $"{scheme}://{host}";
-
-        return _ingressBaseUrl.TrimEnd('/');
+        
+        return !string.IsNullOrWhiteSpace(host)
+            ? $"{scheme}://{host}" 
+            : _ingressBaseUrl.TrimEnd('/');
     }
 
     private static string? ExtractHostFromUrl(string? url)
@@ -405,6 +376,8 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
         if (long.TryParse(raw, out var b)) return b;
         return null;
     }
+    
+    #endregion
 
     public void Dispose()
     {

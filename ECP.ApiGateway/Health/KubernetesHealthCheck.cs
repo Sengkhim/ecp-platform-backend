@@ -8,7 +8,7 @@ namespace ECP.ApiGateway.Health;
 /// and list ingress resources in the configured namespace.
 /// </summary>
 public sealed class KubernetesHealthCheck(
-    IKubernetes k8sClient,
+    IKubernetes k8SClient,
     IConfiguration configuration) : IHealthCheck
 {
     public async Task<HealthCheckResult> CheckHealthAsync(
@@ -19,7 +19,7 @@ public sealed class KubernetesHealthCheck(
         {
             var ns = configuration["Kubernetes:Namespace"] ?? "weather-api";
 
-            var ingresses = await k8sClient.NetworkingV1.ListNamespacedIngressAsync(
+            var ingresses = await k8SClient.NetworkingV1.ListNamespacedIngressAsync(
                 ns,
                 limit: 10,
                 cancellationToken: cancellationToken);
