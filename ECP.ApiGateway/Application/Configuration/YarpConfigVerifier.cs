@@ -1,6 +1,6 @@
 using Yarp.ReverseProxy.Configuration;
 
-namespace ECP.ApiGateway.Configuration;
+namespace ECP.ApiGateway.Application.Configuration;
 
 /// <summary>
 /// Runs at startup and logs exactly which IProxyConfigProvider(s) YARP sees.

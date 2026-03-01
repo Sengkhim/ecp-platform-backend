@@ -1,7 +1,7 @@
 using k8s;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-namespace ECP.ApiGateway.Health;
+namespace ECP.ApiGateway.Application.Health;
 
 /// <summary>
 /// Verifies the API gateway can reach the Kubernetes API server
@@ -17,19 +17,17 @@ public sealed class KubernetesHealthCheck(
     {
         try
         {
-            var ns = configuration["Kubernetes:Namespace"] ?? "weather-api";
+            var ns = configuration["Kubernetes:Namespace"] ?? "default";
 
             var ingresses = await k8SClient.NetworkingV1.ListNamespacedIngressAsync(
-                ns,
-                limit: 10,
-                cancellationToken: cancellationToken);
+                ns, limit: 10, cancellationToken: cancellationToken);
 
             var enabled = ingresses.Items
                 .Count(i => i.Metadata.Annotations
                     ?.TryGetValue("proxy.gateway/enabled", out var v) == true && v == "true");
 
             return HealthCheckResult.Healthy(
-                $"Kubernetes API reachable. Namespace '{ns}': " +
+                $"K8s API reachable. Namespace '{ns}': " +
                 $"{ingresses.Items.Count} ingress(es), {enabled} gateway-enabled.",
                 data: new Dictionary<string, object>
                 {
@@ -40,8 +38,7 @@ public sealed class KubernetesHealthCheck(
         }
         catch (Exception ex)
         {
-            return HealthCheckResult.Unhealthy(
-                "Cannot reach Kubernetes API server.", exception: ex);
+            return HealthCheckResult.Unhealthy("Cannot reach Kubernetes API.", ex);
         }
     }
 }

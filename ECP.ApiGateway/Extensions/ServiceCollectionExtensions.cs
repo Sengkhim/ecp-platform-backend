@@ -1,7 +1,8 @@
 using System.Threading.RateLimiting;
-using ECP.ApiGateway.Configuration;
+using ECP.ApiGateway.Application.Configuration;
+using ECP.ApiGateway.Application.Factory;
+using ECP.ApiGateway.Application.Health;
 using ECP.ApiGateway.Discovery;
-using ECP.ApiGateway.Health;
 using k8s;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -87,24 +88,29 @@ public static class ServiceCollectionExtensions
 
         private void KubernetesConfiguration()
         {
-            // ── Kubernetes Client 
-            services.AddSingleton<IKubernetes>(_ =>
-            {
-                var config = KubernetesClientConfiguration.IsInCluster()
-                    ? KubernetesClientConfiguration.InClusterConfig()
-                    : KubernetesClientConfiguration.BuildConfigFromConfigFile();
-                return new Kubernetes(config);
-            });
+            // ── Kubernetes Client ──────────────────────────────────────────────────
+            // KubernetesClientFactory handles all three environments automatically:
+            //   - Production (in-cluster)   : uses service account token
+            //   - Local dotnet run          : uses ~/.kube/config
+            //   - Docker compose            : mounted kubeconfig + path/host patching
+            services.AddSingleton<IKubernetes>(sp =>
+                KubernetesClientFactory.Create(sp.GetRequiredService<ILogger<Program>>()));
         }
 
         private void ServiceDiscoveryConfigure()
         {
+            var providers = services
+                .Where(d => d.ServiceType == typeof(IProxyConfigProvider))
+                .ToList();
+            
+            foreach (var d in providers)
+                services.Remove(d);
+            
             // ── YARP + Kubernetes Service Discovery 
             // IProxyConfigProvider MUST be registered BEFORE AddReverseProxy().
             // Never call .LoadFromMemory() — it registers a conflicting provider.
             services.AddSingleton<KubernetesServiceDiscoveryProvider>();
-            services.AddSingleton<IProxyConfigProvider>(sp =>
-                sp.GetRequiredService<KubernetesServiceDiscoveryProvider>());
+            services.AddSingleton<IProxyConfigProvider>(sp => sp.GetRequiredService<KubernetesServiceDiscoveryProvider>());
         }
     }
 }

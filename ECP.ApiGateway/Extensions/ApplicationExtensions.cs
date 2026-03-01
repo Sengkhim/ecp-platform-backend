@@ -9,33 +9,43 @@ public static class ApplicationExtensions
     {
         public void UseMapReverseProxy()
         {
-            // ── YARP Reverse Proxy 
             app.MapReverseProxy(pipeline =>
             {
-                // Diagnostic middleware — logs the exact request YARP forwards
+                // Diagnostic: log exactly what YARP is forwarding
                 pipeline.Use(async (context, next) =>
                 {
-                    var logger       = context.RequestServices.GetRequiredService<ILogger<Program>>();
+                    var logger = context.RequestServices
+                        .GetRequiredService<ILogger<Program>>();
+
                     var proxyFeature = context.GetReverseProxyFeature();
-                    var dest         = proxyFeature.AvailableDestinations
+                    var dest = proxyFeature.AvailableDestinations
                         .FirstOrDefault()?.Model.Config.Address ?? "unknown";
 
+                    // Log BEFORE transforms — what came in from the client
                     logger.LogInformation(
-                        "[YARP PRE]  Route={Route} | Path={Path} | Host={Host} | Dest={Dest} | Transforms={Count}",
+                        "[YARP PRE]  Route={Route} | IncomingPath={Path} | IncomingHost={Host}",
                         proxyFeature.Route.Config.RouteId,
                         context.Request.Path,
-                        context.Request.Headers.Host.ToString(),
+                        context.Request.Headers.Host.ToString());
+
+                    logger.LogInformation(
+                        "[YARP PRE]  Destination={Dest} | Transforms={Count}",
                         dest,
                         proxyFeature.Route.Config.Transforms?.Count ?? 0);
 
-                    if (proxyFeature.Route.Config.Transforms is { } transforms)
-                        foreach (var t in transforms)
+                    // Dump every transform
+                    if (proxyFeature.Route.Config.Transforms is { } trs)
+                        foreach (var t in trs)
                             logger.LogInformation("[YARP TRANSFORM] {T}",
                                 string.Join(" | ", t.Select(kv => $"{kv.Key}={kv.Value}")));
 
                     await next();
 
-                    logger.LogInformation("[YARP POST] Status={Status}", context.Response.StatusCode);
+                    logger.LogInformation(
+                        "[YARP POST] Status={Status} | FinalPath={Path} | FinalHost={Host}",
+                        context.Response.StatusCode,
+                        context.Request.Path,
+                        context.Request.Headers.Host.ToString());
                 });
 
                 pipeline.UseSessionAffinity();

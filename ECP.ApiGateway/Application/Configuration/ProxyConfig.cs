@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Primitives;
 using Yarp.ReverseProxy.Configuration;
 
-namespace ECP.ApiGateway.Configuration;
+namespace ECP.ApiGateway.Application.Configuration;
 
 /// <summary>
 /// A single immutable snapshot of routes + clusters.

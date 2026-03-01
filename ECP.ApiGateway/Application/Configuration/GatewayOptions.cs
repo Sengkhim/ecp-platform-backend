@@ -1,4 +1,4 @@
-namespace ECP.ApiGateway.Configuration;
+namespace ECP.ApiGateway.Application.Configuration;
 
 public sealed class GatewayOptions
 {

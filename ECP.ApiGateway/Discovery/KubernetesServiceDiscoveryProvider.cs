@@ -2,7 +2,7 @@ using k8s;
 using k8s.Models;
 using Yarp.ReverseProxy.Configuration;
 using System.Collections.Concurrent;
-using ECP.ApiGateway.Configuration;
+using ECP.ApiGateway.Application.Configuration;
 using Yarp.ReverseProxy.Forwarder;
 
 namespace ECP.ApiGateway.Discovery;
@@ -80,9 +80,7 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
         _k8S            = k8S;
         _logger         = logger;
         _namespace      = configuration["Kubernetes:Namespace"] ?? "weather-api";
-        _ingressBaseUrl = configuration["Kubernetes:IngressBaseUrl"]
-                          ?? throw new InvalidOperationException(
-                              "Missing config key: Kubernetes:IngressBaseUrl");
+        _ingressBaseUrl = configuration["Kubernetes:IngressBaseUrl"] ?? "http://analystservice.local";
 
         // Start with an empty snapshot — YARP subscribes to its ChangeToken.
         // The K8s watcher will fire immediately with existing ingresses,
@@ -92,16 +90,13 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
         _ = WatchIngressAsync(_cts.Token);
     }
 
-    // ── IProxyConfigProvider ───────────────────────────────────────────────
-
     /// <summary>
     /// Called by YARP on startup and on every ChangeToken fire.
     /// Returns the current immutable snapshot.
     /// </summary>
     public IProxyConfig GetConfig() => _current;
 
-    // ── Kubernetes Watcher ─────────────────────────────────────────────────
-
+    #region Kubernetes Watcher
     [Obsolete("Obsolete")]
     private async Task WatchIngressAsync(CancellationToken ct)
     {
@@ -118,9 +113,9 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
                         _namespace, watch: true, cancellationToken: ct);
 
                 await foreach (var (type, ingress) in response
-                    .WatchAsync<V1Ingress, V1IngressList>(
-                        onError: ex => _logger.LogWarning(ex, "Ingress watch error"),
-                        cancellationToken: ct))
+                                   .WatchAsync<V1Ingress, V1IngressList>(
+                                       onError: ex => _logger.LogWarning(ex, "Ingress watch error"),
+                                       cancellationToken: ct))
                 {
                     var key = $"{ingress.Namespace()}/{ingress.Name()}";
 
@@ -154,9 +149,9 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
             }
         }
     }
+    #endregion
 
-    // ── Config Rebuild ─────────────────────────────────────────────────────
-
+    #region  Config Rebuild
     private void RebuildConfig()
     {
         var routes   = new List<RouteConfig>();
@@ -342,6 +337,7 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
         _logger.LogInformation(
             "YARP config rebuilt — {Count} gateway-enabled ingress(es)", routes.Count);
     }
+    #endregion
 
     #region  Hepler method
 
