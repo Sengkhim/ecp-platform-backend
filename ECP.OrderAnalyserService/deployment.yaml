@@ -1,0 +1,204 @@
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ecp-dev
+  labels:
+    name: ecp-dev
+    environment: development
+
+---
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-analy-service
+  namespace: ecp-dev
+  labels:
+    app: order-analy-service
+    version: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-analy-service
+  template:
+    metadata:
+      labels:
+        app: order-analy-service
+        version: dev
+    spec:
+      containers:
+        - name: order-analy-service
+          image: ecp.order_analy_serservice:dev
+          imagePullPolicy: Never  # Use local image loaded into Minikube
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Development"
+            - name: ASPNETCORE_URLS
+              value: "http://+:8080"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          # Startup probe - gives app time to start (up to 5 minutes)
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30  # 30 * 10s = 300s (5 minutes) to start
+          # Liveness probe - restarts if app becomes unhealthy
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # Readiness probe - stops traffic if app not ready
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+      restartPolicy: Always
+
+---
+# Service (ClusterIP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-analy-service
+  namespace: ecp-dev
+  labels:
+    app: order-analy-service
+spec:
+  type: ClusterIP
+  selector:
+    app: order-analy-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+  sessionAffinity: None
+
+---
+# LoadBalancer Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-analy-service-lb
+  namespace: ecp-dev
+  labels:
+    app: order-analy-service
+#  annotations:
+  # Add cloud provider specific annotations here if needed
+  # For AWS: service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+  # For Azure: service.beta.kubernetes.io/azure-load-balancer-internal: "false"
+  # For GCP: cloud.google.com/load-balancer-type: "External"
+spec:
+  type: LoadBalancer
+  selector:
+    app: order-analy-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+  sessionAffinity: None
+  # Uncomment to specify a static IP (cloud provider specific)
+  # loadBalancerIP: "your-static-ip-here"
+
+---
+# Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: order-analy-service-ingress
+  namespace: ecp-dev
+  labels:
+    app: order-analy-service
+  annotations:
+    # Nginx Ingress Controller annotations
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    
+    # ── CORS ──────────────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,Authorization,Content-Type"
+
+    # ── Timeouts ───────────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+
+    # ── Max upload size ────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    
+    # ── API Gateway (YARP) discovery ──────────────────────────────────────
+    #
+    # proxy.gateway/destination-url is NOT needed here because the ingress
+    # rule already declares:  host: analystorder.dev
+    # The gateway reads that host and builds:
+    #   destination = http://analystorder.dev  (from IngressBaseUrl scheme
+    #                                           + ingress rule host)
+    # OR set IngressBaseUrl=http://analystorder.dev in appsettings.json
+    # and leave destination-url absent — the host header is set automatically.
+    #
+    # Route mapping:
+    #   /api/analyst/{**catch-all}  →  strip /api/analyst  →  /{catch-all}
+    #   e.g. /api/analyst/weatherforecast → /weatherforecast
+    #   e.g. /api/analyst/health          → /health
+    proxy.gateway/enabled: "true"
+    proxy.gateway/route-path: "/api/analyst/{**catch-all}"
+    proxy.gateway/strip-prefix: "true"
+    proxy.gateway/health-path: "/health/live"
+    
+    # Uncomment for SSL/TLS
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    
+    # Additional annotations based on your ingress controller
+    # For AWS ALB Ingress Controller:
+    # alb.ingress.kubernetes.io/scheme: internet-facing
+    # alb.ingress.kubernetes.io/target-type: ip
+    
+    # For rate limiting:
+    # nginx.ingress.kubernetes.io/limit-rps: "100"
+spec:
+  ingressClassName: nginx  # Change based on your ingress controller (nginx, alb, traefik, etc.)
+  rules:
+    - host: analystorder.dev  # Replace with your actual domain (must be lowercase)
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: order-analy-service
+                port:
+                  number: 80
+  
+  # Uncomment for TLS/SSL configuration
+  # tls:
+  # - hosts:
+  #   - analystorder.dev
+  #   secretName: order-analy-service-tls

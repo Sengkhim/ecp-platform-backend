@@ -1,0 +1,16 @@
+GET http://localhost:5028/api/analyst/status
+Accept: application/json
+
+###
+GET http://localhost:5028/health/live
+Accept: application/json
+
+
+### api-gateway.local  127.0.0.1 
+GET http://api-gateway.local/health/live
+Accept: application/json
+
+
+### 127.0.0.1  
+GET http://192.168.49.2/api/analyst/status
+Accept: application/json

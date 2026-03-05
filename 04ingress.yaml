@@ -1,0 +1,75 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: order-analy-service-ingress
+  namespace: ecp-dev
+  labels:
+    app: order-analy-service
+  annotations:
+    # Nginx Ingress Controller annotations
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    
+    # ── CORS ──────────────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,Authorization,Content-Type"
+
+    # ── Timeouts ───────────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+
+    # ── Max upload size ────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    
+    # ── API Gateway (YARP) discovery ──────────────────────────────────────
+    #
+    # proxy.gateway/destination-url is NOT needed here because the ingress
+    # rule already declares:  host: analystservice.local
+    # The gateway reads that host and builds:
+    #   destination = http://analystservice.local  (from IngressBaseUrl scheme
+    #                                               + ingress rule host)
+    # OR set IngressBaseUrl=http://analystservice.local in appsettings.json
+    # and leave destination-url absent — the host header is set automatically.
+    #
+    # Route mapping:
+    #   /api/analyst/{**catch-all}  →  strip /api/analyst  →  /{catch-all}
+    #   e.g. /api/analyst/weatherforecast → /weatherforecast
+    #   e.g. /api/analyst/health          → /health
+    proxy.gateway/enabled: "true"
+    proxy.gateway/route-path: "/api/analyst/{**catch-all}"
+    proxy.gateway/strip-prefix: "true"
+    proxy.gateway/health-path: "/health"
+    
+    # Uncomment for SSL/TLS
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    
+    # Additional annotations based on your ingress controller
+    # For AWS ALB Ingress Controller:
+    # alb.ingress.kubernetes.io/scheme: internet-facing
+    # alb.ingress.kubernetes.io/target-type: ip
+    
+    # For rate limiting:
+    # nginx.ingress.kubernetes.io/limit-rps: "100"
+spec:
+  ingressClassName: nginx  # Change based on your ingress controller (nginx, alb, traefik, etc.)
+  rules:
+    - host: analyst-order.dev # Replace with your actual domain
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: order-analy-service
+                port:
+                  number: 80
+                  
+  # Uncomment for TLS/SSL configuration
+  # tls:
+  # - hosts:
+  #   - order-analy-service.ecp-dev.example.com
+  #   secretName: order-analy-service-tls

@@ -1,0 +1,5 @@
+@url=http://127.0.0.1:5047
+
+GET http://127.0.0.1:5047/health/live
+Accept: application/json
+

@@ -11,8 +11,9 @@ builder.Services.AddSwaggerGen();
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Services.AddKafkaComponent();
+// builder.Services.RegisterMongoDbMaps();  // Before AddMassTransit
 builder.Services.AddSingleton<BsonClassMap<OrderState>, OrderStateClassMap>();
-
+BsonClassMap.RegisterClassMap(new OrderStateClassMap());  // ✅ Correct
 var app = builder.Build();
 
 app.UseSwagger();

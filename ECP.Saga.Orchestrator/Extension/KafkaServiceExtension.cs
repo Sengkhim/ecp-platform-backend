@@ -1,4 +1,6 @@
 using Contracts;
+using ECP.OrderService.Application.Contracts.Events;
+using ECP.PaymentService.Consumer;
 using ECP.Saga.Orchestrator.StateData;
 using MassTransit;
 
@@ -12,80 +14,88 @@ public static class KafkaServiceExtension
         services.AddMassTransit(m =>
         {
             m.SetKebabCaseEndpointNameFormatter();
-            m.AddSagaStateMachine();
-            m.AddConsumers(typeof(Program).Assembly);
-            m.UsingInMemory((context, cfg) => cfg.ConfigureEndpoints(context));
+            m.AddDelayedMessageScheduler();
+            m.AddSagaStateMachine<OrderStateMachine, OrderState>()
+                .MongoDbRepository(r =>
+                {
+                    r.DatabaseName   = "sagas";
+                    r.CollectionName = "sagas";
+                    r.Connection     = "mongodb://root:pass168@127.0.0.1:27017/sagas?authSource=admin";
+                });
+            
+            m.AddConsumer<ProcessPaymentConsumer>();
+            m.UsingInMemory((ctx, cfg) =>
+            {
+                cfg.UseDelayedMessageScheduler();
+                cfg.ConfigureEndpoints(ctx);
+            });
+            
             m.AddRider(rider =>
             {
-                rider.KafkaConfigure();
-                rider.UsingKafka((context, k) => k.EndpointConfigure(context));
+                rider.AddSagaStateMachine<OrderStateMachine, OrderState>();
+                rider.AddConsumer<ProcessPaymentConsumer>();
+                ConfigureKafkaProducers(rider);
+                rider.UsingKafka(ConfigureKafkaEndpoints);
             });
         });
     }
-
-    private static void AddSagaStateMachine(this IBusRegistrationConfigurator m)
+    
+    private static void ConfigureKafkaProducers(IRiderRegistrationConfigurator rider)
     {
-        m.AddSagaStateMachine<OrderStateMachine, OrderState>()
-            .MongoDbRepository(r =>
-            {
-                r.DatabaseName = "sagas";
-                r.CollectionName = "sagas";
-                r.Connection = "mongodb://root:pass168@127.0.0.1:27017/sagas?authSource=admin";
-            });
-    }
-
-    private static void KafkaConfigure(this IRiderRegistrationConfigurator rider)
-    {
-        rider.AddProducer<ProcessPaymentRequest>("process-payment-request");
-        rider.AddProducer<CheckInventory>("check-inventory");
+        rider.AddProducer<RequestPayment>("request-payment");
+        rider.AddProducer<ProcessPayment>("process-payment");
+        rider.AddProducer<CheckInventoryEvent>("check-inventory");
         rider.AddProducer<OrderFailed>("order-failed");
         rider.AddProducer<NotificationRequest>("notification-request");
-        rider.AddConsumers(typeof(Program).Assembly);
-        rider.AddSagaStateMachine<OrderStateMachine, OrderState>()
-            .MongoDbRepository(r =>
-            {
-                r.DatabaseName = "sagas";
-                r.CollectionName = "sagas";
-                r.Connection = "mongodb://root:pass168@127.0.0.1:27017/sagas?authSource=admin";
-            });
+        rider.AddProducer<PaymentFailed>("payment-failed");
     }
-
-    private static void EndpointConfigure(
-        this IKafkaFactoryConfigurator k, IRiderRegistrationContext context)
+    
+    private static void ConfigureKafkaEndpoints(
+        IRiderRegistrationContext riderCtx,
+        IKafkaFactoryConfigurator k)
     {
         k.Host("localhost:9092");
-        k.TopicEndpoint<OrderCreated>(
-            "order-created", "orchestrator", e =>
-            {
-                e.ConfigureSaga<OrderState>(context);
-            });
-                        
-        k.TopicEndpoint<InventoryReserved>(
-            "inventory-reserved", 
-            "orchestrator", e =>
-            {
-                e.ConfigureSaga<OrderState>(context);
-            });
-                    
-        k.TopicEndpoint<InventoryFailed>(
-            "inventory-failed", 
-            "orchestrator", e =>
-            {
-                e.ConfigureSaga<OrderState>(context);
-            });
-                    
-        k.TopicEndpoint<ProcessPayment>(
-            "process-payment", 
-            "orchestrator", e =>
-            {
-                e.ConfigureSaga<OrderState>(context);
-            });
-                    
-        k.TopicEndpoint<PaymentFailed>(
-            "payment-failed", 
-            "orchestrator", e =>
-            {
-                e.ConfigureSaga<OrderState>(context);
-            });
+        
+        k.TopicEndpoint<OrderCreatedEvent>("order-created", "orchestrator", e =>
+        {
+            e.AutoStart = true;
+            e.CreateIfMissing(t => t.NumPartitions = 2);
+            e.ConfigureSaga<OrderState>(riderCtx);
+        });
+        
+        k.TopicEndpoint<InventoryReserved>("inventory-reserved", "orchestrator", e =>
+        {
+            e.AutoStart = true;
+            e.CreateIfMissing(t => t.NumPartitions = 2);
+            e.ConfigureSaga<OrderState>(riderCtx);
+        });
+        
+        k.TopicEndpoint<InventoryFailed>("inventory-failed", "orchestrator", e =>
+        {
+            e.AutoStart = true;
+            e.CreateIfMissing(t => t.NumPartitions = 2);
+            e.ConfigureSaga<OrderState>(riderCtx);
+        });
+        
+        k.TopicEndpoint<ProcessPayment>("process-payment", "orchestrator", e =>
+        {
+            e.AutoStart = true;
+            e.CreateIfMissing(t => t.NumPartitions = 2);
+            e.ConfigureSaga<OrderState>(riderCtx);
+        });
+        
+        k.TopicEndpoint<PaymentFailed>("payment-failed", "orchestrator", e =>
+        {
+            e.AutoStart = true;
+            e.CreateIfMissing(t => t.NumPartitions = 2);
+            e.ConfigureSaga<OrderState>(riderCtx);
+        });
+
+        k.TopicEndpoint<RequestPayment>("request-payment", "orchestrator", e =>
+        {
+            e.AutoStart = true;
+            e.CreateIfMissing(t => t.NumPartitions = 2);
+            e.ConfigureSaga<OrderState>(riderCtx);
+        });
     }
 }

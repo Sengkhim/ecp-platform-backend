@@ -10,9 +10,17 @@ public static class KafkaActivityServiceExtension
     /// <param name="services"></param>
     public static void AddActivities(this IServiceCollection services)
     {
-        services.AddScoped<SendNotificationActivity>();
+        // ── Inventory flow ────────────────────────────────────────────────
         services.AddScoped<CheckInventoryActivity>();
-        services.AddScoped<OrderActivity>();
+        services.AddScoped<InventoryCompensationActivity>();
+        services.AddScoped<InventoryTimeoutCompensationActivity>();
+
+        // ── Payment flow ──────────────────────────────────────────────────
         services.AddScoped<PaymentRequestActivity>();
+        services.AddScoped<PaymentCompensationActivity>();
+        services.AddScoped<PaymentTimeoutCompensationActivity>();
+
+        // ── Completion ────────────────────────────────────────────────────
+        services.AddScoped<SendNotificationActivity>();
     }
 }

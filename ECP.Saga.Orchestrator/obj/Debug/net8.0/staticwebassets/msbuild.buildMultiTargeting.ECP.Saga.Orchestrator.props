@@ -1,3 +1,0 @@
-﻿<Project>
-  <Import Project="../build/ECP.Saga.Orchestrator.props" />
-</Project>
