@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ECP.ApiGateway", "ECP.ApiGa
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ECP.OrderAnalyserService", "ECP.OrderAnalyserService\ECP.OrderAnalyserService.csproj", "{692AAC38-96F7-4EED-A745-9571EA7221E2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ECP.Warehouse", "ECP.Warehouse\ECP.Warehouse.csproj", "{500BECD8-5CED-4F9C-A118-B8834A592C78}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -53,6 +55,10 @@ Global
 		{692AAC38-96F7-4EED-A745-9571EA7221E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{692AAC38-96F7-4EED-A745-9571EA7221E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{692AAC38-96F7-4EED-A745-9571EA7221E2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{500BECD8-5CED-4F9C-A118-B8834A592C78}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{500BECD8-5CED-4F9C-A118-B8834A592C78}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{500BECD8-5CED-4F9C-A118-B8834A592C78}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{500BECD8-5CED-4F9C-A118-B8834A592C78}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 	EndGlobalSection

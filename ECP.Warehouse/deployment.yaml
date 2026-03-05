@@ -1,0 +1,200 @@
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ecp-dev
+  labels:
+    name: ecp-dev
+    environment: development
+
+---
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecp-warehouse
+  namespace: ecp-dev
+  labels:
+    app: ecp-warehouse
+    version: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ecp-warehouse
+  template:
+    metadata:
+      labels:
+        app: ecp-warehouse
+        version: dev
+    spec:
+      containers:
+        - name: ecp-warehouse
+          image: ecp-warehouse:dev
+          imagePullPolicy: Never  # Use local image loaded into Minikube
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Development"
+            - name: ASPNETCORE_URLS
+              value: "http://+:8080"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+      restartPolicy: Always
+
+---
+# Service (ClusterIP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: ecp-warehouse
+  namespace: ecp-dev
+  labels:
+    app: ecp-warehouse
+spec:
+  type: ClusterIP
+  selector:
+    app: ecp-warehouse
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+  sessionAffinity: None
+
+---
+# NodePort Service (Minikube direct access)
+# Access via: http://<minikube-ip>:30080
+apiVersion: v1
+kind: Service
+metadata:
+  name: ecp-warehouse-nodeport
+  namespace: ecp-dev
+  labels:
+    app: ecp-warehouse
+spec:
+  type: NodePort
+  selector:
+    app: ecp-warehouse
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      nodePort: 30080
+      protocol: TCP
+  sessionAffinity: None
+
+---
+# LoadBalancer Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ecp-warehouse-lb
+  namespace: ecp-dev
+  labels:
+    app: ecp-warehouse
+  #  annotations:
+  # Add cloud provider specific annotations here if needed
+  # For AWS: service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+  # For Azure: service.beta.kubernetes.io/azure-load-balancer-internal: "false"
+  # For GCP: cloud.google.com/load-balancer-type: "External"
+spec:
+  type: LoadBalancer
+  selector:
+    app: ecp-warehouse
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+  sessionAffinity: None
+  # Uncomment to specify a static IP (cloud provider specific)
+  # loadBalancerIP: "your-static-ip-here"
+
+---
+# Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecp-warehouse-ingress
+  namespace: ecp-dev
+  labels:
+    app: ecp-warehouse
+  annotations:
+    # Nginx Ingress Controller annotations
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    
+    # ── CORS ──────────────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,Authorization,Content-Type"
+
+    # ── Timeouts ───────────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+
+    # ── Max upload size ────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    
+    # ── API Gateway (YARP) discovery ──────────────────────────────────────
+    #
+    # proxy.gateway/destination-url is NOT needed here because the ingress
+    # rule already declares:  host: ecp-warehouse.dev
+    # The gateway reads that host and builds:
+    #   destination = http://ecp-warehouse.dev  (from IngressBaseUrl scheme
+    #                                           + ingress rule host)
+    # OR set IngressBaseUrl=http://ecp-warehouse.dev in appsettings.json
+    # and leave destination-url absent — the host header is set automatically.
+    #
+    # Route mapping:
+    #   /api/analyst/{**catch-all}  →  strip /api/analyst  →  /{catch-all}
+    #   e.g. /api/analyst/weatherforecast → /weatherforecast
+    #   e.g. /api/analyst/health          → /health
+    proxy.gateway/enabled: "true"
+    proxy.gateway/route-path: "/api/analyst/{**catch-all}"
+    proxy.gateway/strip-prefix: "true"
+    proxy.gateway/health-path: "/health/live"
+    
+    # Uncomment for SSL/TLS
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    
+    # Additional annotations based on your ingress controller
+    # For AWS ALB Ingress Controller:
+    # alb.ingress.kubernetes.io/scheme: internet-facing
+    # alb.ingress.kubernetes.io/target-type: ip
+    
+    # For rate limiting:
+    # nginx.ingress.kubernetes.io/limit-rps: "100"
+spec:
+  ingressClassName: nginx  # Change based on your ingress controller (nginx, alb, traefik, etc.)
+  rules:
+    - host: ecp-warehouse.dev  # ⚠️ Add to /etc/hosts: <minikube-ip> ecp-warehouse.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ecp-warehouse
+                port:
+                  number: 80
+  
+  # Uncomment for TLS/SSL configuration
+  # tls:
+  # - hosts:
+  #   - ecp-warehouse.dev
+  #   secretName: ecp-warehouse-tls

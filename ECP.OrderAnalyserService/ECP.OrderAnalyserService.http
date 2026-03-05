@@ -1,6 +1,5 @@
-@ECP.OrderAnalyserService_HostAddress = http://localhost:5047
+@url=http://127.0.0.1:5047
 
-GET {{ECP.OrderAnalyserService_HostAddress}}/weatherforecast/
+GET http://127.0.0.1:5047/health/live
 Accept: application/json
 
-###

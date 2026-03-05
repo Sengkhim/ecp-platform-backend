@@ -4,28 +4,21 @@ echo "Deleting ecp-dev namespace and all resources"
 echo "=========================================="
 
 # Delete the namespace (this will delete all resources within it)
-# kubectl delete namespace ecp-dev
-
-# Quick fix script - applies the corrected deployment
-
-# Additional wait to ensure cleanup
-#sleep 5
+#kubectl delete namespace ecp-dev
 
 echo ""
 echo "=========================================="
-echo "Loading local Docker image to Minikube"
+echo "Rebuild image and loading local Docker image to Minikube"
 echo "=========================================="
 
-echo "Re-Build image and load to minikube"
-
-docker build -t ecp-warehouse:dev -f Dockerfile .
+docker build -t ecp-warehouse:dev .
 
 # Load the local image into Minikube
-minikube image load ecp.order_analy_serservice:dev
+sudo minikube image load ecp-warehouse:dev
 
 echo ""
 echo "Verifying image is loaded:"
-minikube image ls | grep ecp.order_analy_serservice
+minikube image ls | grep ecp-warehouse
 
 # Apply the updated deployment
 kubectl apply -f deployment.yaml

@@ -1,0 +1,7 @@
+#@HostAddress = http://localhost
+@HostAddress = http://ecp-warehouse.dev
+
+GET {{HostAddress}}/
+Accept: application/json
+
+###

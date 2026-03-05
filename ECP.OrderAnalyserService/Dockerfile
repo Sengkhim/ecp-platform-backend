@@ -7,8 +7,8 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["ECP.OrderAnalyserService/ECP.OrderAnalyserService.csproj", "ECP.OrderAnalyserService/"]
-RUN dotnet restore "ECP.OrderAnalyserService/ECP.OrderAnalyserService.csproj"
+COPY ["ECP.OrderAnalyserService.csproj", "ECP.OrderAnalyserService/"]
+RUN dotnet restore "ECP.OrderAnalyserService.csproj"
 COPY . .
 WORKDIR "/src/ECP.OrderAnalyserService"
 RUN dotnet build "./ECP.OrderAnalyserService.csproj" -c $BUILD_CONFIGURATION -o /app/build
