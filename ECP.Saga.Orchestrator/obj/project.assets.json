@@ -2397,19 +2397,19 @@
     ]
   },
   "packageFolders": {
-    "/Users/sudo/.nuget/packages/": {}
+    "/Users/binary/.nuget/packages/": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/Users/sudo/Development/Workspace/AppServices/MassTransitXkafka/ECP.Saga.Orchestrator/ECP.Saga.Orchestrator.csproj",
+      "projectUniqueName": "/Users/binary/Documents/Developments/ECP/ECP.Saga.Orchestrator/ECP.Saga.Orchestrator.csproj",
       "projectName": "ECP.Saga.Orchestrator",
-      "projectPath": "/Users/sudo/Development/Workspace/AppServices/MassTransitXkafka/ECP.Saga.Orchestrator/ECP.Saga.Orchestrator.csproj",
-      "packagesPath": "/Users/sudo/.nuget/packages/",
-      "outputPath": "/Users/sudo/Development/Workspace/AppServices/MassTransitXkafka/ECP.Saga.Orchestrator/obj/",
+      "projectPath": "/Users/binary/Documents/Developments/ECP/ECP.Saga.Orchestrator/ECP.Saga.Orchestrator.csproj",
+      "packagesPath": "/Users/binary/.nuget/packages/",
+      "outputPath": "/Users/binary/Documents/Developments/ECP/ECP.Saga.Orchestrator/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "/Users/sudo/.nuget/NuGet/NuGet.Config"
+        "/Users/binary/.nuget/NuGet/NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net8.0"
@@ -2421,8 +2421,8 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "projectReferences": {
-            "/Users/sudo/Development/Workspace/AppServices/MassTransitXkafka/Contracts/Contracts.csproj": {
-              "projectPath": "/Users/sudo/Development/Workspace/AppServices/MassTransitXkafka/Contracts/Contracts.csproj"
+            "/Users/binary/Documents/Developments/ECP/Contracts/Contracts.csproj": {
+              "projectPath": "/Users/binary/Documents/Developments/ECP/Contracts/Contracts.csproj"
             }
           }
         }
@@ -2437,7 +2437,7 @@
         "auditLevel": "low",
         "auditMode": "direct"
       },
-      "SdkAnalysisLevel": "9.0.300"
+      "SdkAnalysisLevel": "10.0.100"
     },
     "frameworks": {
       "net8.0": {
@@ -2483,20 +2483,6 @@
         ],
         "assetTargetFallback": true,
         "warn": true,
-        "downloadDependencies": [
-          {
-            "name": "Microsoft.AspNetCore.App.Ref",
-            "version": "[8.0.20, 8.0.20]"
-          },
-          {
-            "name": "Microsoft.NETCore.App.Host.osx-arm64",
-            "version": "[8.0.20, 8.0.20]"
-          },
-          {
-            "name": "Microsoft.NETCore.App.Ref",
-            "version": "[8.0.20, 8.0.20]"
-          }
-        ],
         "frameworkReferences": {
           "Microsoft.AspNetCore.App": {
             "privateAssets": "none"
@@ -2505,7 +2491,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "/Users/sudo/.dotnet/sdk/9.0.305/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/10.0.102/PortableRuntimeIdentifierGraph.json"
       }
     }
   }
