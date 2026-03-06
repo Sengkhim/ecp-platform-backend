@@ -12,5 +12,5 @@ Accept: application/json
 
 
 ### 127.0.0.1  
-GET http://192.168.49.2/api/analyst/status
+GET http://localhost:5028/api/epc-warehouse
 Accept: application/json

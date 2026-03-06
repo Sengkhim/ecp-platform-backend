@@ -79,8 +79,8 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
     {
         _k8S            = k8S;
         _logger         = logger;
-        _namespace      = configuration["Kubernetes:Namespace"] ?? "weather-api";
-        _ingressBaseUrl = configuration["Kubernetes:IngressBaseUrl"] ?? "http://analystservice.local";
+        _namespace      = configuration["Kubernetes:Namespace"] ?? "ecp-dev";
+        _ingressBaseUrl = configuration["Kubernetes:IngressBaseUrl"] ?? "http://ecp-warehouse";
 
         // Start with an empty snapshot — YARP subscribes to its ChangeToken.
         // The K8s watcher will fire immediately with existing ingresses,
@@ -289,7 +289,7 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
                 ClusterId    = clusterId,
                 Destinations = new Dictionary<string, DestinationConfig>
                 {
-                    ["dest-0"] = new DestinationConfig
+                    ["dest-0"] = new()
                     {
                         Address  = destinationAddress,
                         Metadata = new Dictionary<string, string>

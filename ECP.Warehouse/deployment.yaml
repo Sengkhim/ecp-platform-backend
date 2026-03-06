@@ -164,7 +164,7 @@ metadata:
     #   e.g. /api/analyst/weatherforecast → /weatherforecast
     #   e.g. /api/analyst/health          → /health
     proxy.gateway/enabled: "true"
-    proxy.gateway/route-path: "/api/analyst/{**catch-all}"
+    proxy.gateway/route-path: "/api/epc-warehouse/{**catch-all}"
     proxy.gateway/strip-prefix: "true"
     proxy.gateway/health-path: "/health/live"
     
@@ -198,3 +198,32 @@ spec:
   # - hosts:
   #   - ecp-warehouse.dev
   #   secretName: ecp-warehouse-tls
+  
+  
+  
+---
+# MetalLB IPAddressPool
+# ⚠️ Change the addresses range to match YOUR network
+# To find your network range run: ip addr show
+# e.g. if your server IP is 192.168.1.100, use 192.168.1.200-192.168.1.210
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: ecp-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    - 172.20.10.10-172.20.10.13  # /28 subnet: 172.20.10.0 ~ 172.20.10.15
+
+---
+# MetalLB L2Advertisement
+# Announces the IP pool to the local network (Layer 2 mode)
+# Works without BGP router — good for on-premise/bare-metal
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: ecp-advertisement
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - ecp-pool

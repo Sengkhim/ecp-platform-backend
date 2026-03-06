@@ -1,20 +1,13 @@
 #!/bin/bash
-echo "=========================================="
-echo "Deleting ecp-dev namespace and all resources"
-echo "=========================================="
-
-# Delete the namespace (this will delete all resources within it)
-#kubectl delete namespace ecp-dev
-
 echo ""
 echo "=========================================="
 echo "Rebuild image and loading local Docker image to Minikube"
 echo "=========================================="
 
-# docker build -t ecp-warehouse:dev .
+# docker build -t ecp-api-gateway:dev .
 
 # Load the local image into Minikube
-# sudo minikube image load ecp-warehouse:dev
+# minikube image load ecp-warehouse:dev
 
 echo ""
 echo "Verifying image is loaded:"
