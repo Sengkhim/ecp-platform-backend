@@ -8,7 +8,7 @@ namespace ECP.Saga.Orchestrator.Extension;
 
 public static class KafkaServiceExtension
 {
-    public static void AddKafkaComponent(this IServiceCollection services)
+    public static void AddKafkaComponent(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddActivities();
         services.AddMassTransit(m =>
@@ -20,8 +20,8 @@ public static class KafkaServiceExtension
                 {
                     r.DatabaseName   = "sagas";
                     r.CollectionName = "sagas";
-                    r.Connection     = "mongodb://root:pass168@127.0.0.1:27017/sagas?authSource=admin";
-                });
+                    r.Connection = configuration["MongoDB:SagaConnection"]
+                                   ?? "mongodb://root:pass168@127.0.0.1:27017/sagas?authSource=admin";                });
             
             m.AddConsumer<ProcessPaymentConsumer>();
             m.UsingInMemory((ctx, cfg) =>
@@ -35,7 +35,8 @@ public static class KafkaServiceExtension
                 rider.AddSagaStateMachine<OrderStateMachine, OrderState>();
                 rider.AddConsumer<ProcessPaymentConsumer>();
                 ConfigureKafkaProducers(rider);
-                rider.UsingKafka(ConfigureKafkaEndpoints);
+                rider.UsingKafka((context, configurator) => 
+                    ConfigureKafkaEndpoints(context, configurator, configuration));
             });
         });
     }
@@ -52,9 +53,11 @@ public static class KafkaServiceExtension
     
     private static void ConfigureKafkaEndpoints(
         IRiderRegistrationContext riderCtx,
-        IKafkaFactoryConfigurator k)
+        IKafkaFactoryConfigurator k,
+        IConfiguration configuration)
     {
-        k.Host("localhost:9092");
+        k.Host(configuration["Kafka:BootstrapServers"] ?? "kafka.ecp-dev.svc.cluster.local");
+        // k.Host("localhost:9092");
         
         k.TopicEndpoint<OrderCreatedEvent>("order-created", "orchestrator", e =>
         {

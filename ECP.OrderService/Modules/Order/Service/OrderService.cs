@@ -90,7 +90,7 @@ public class OrderService(
             OrderNumber = createdOrder.OrderNumber,
             CustomerId = createdOrder.CustomerId,
             CustomerName = createdOrder.CustomerName,
-            CustomerEmail = createdOrder.CustomerEmail,
+            CustomerEmail = createdOrder.CustomerEmail ?? string.Empty,
             TotalAmount = createdOrder.TotalAmount,
             CreatedAt = createdOrder.CreatedAt,
             Currency = createOrderDto.Currency,

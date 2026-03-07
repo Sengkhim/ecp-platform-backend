@@ -25,3 +25,7 @@ Accept: application/json
 ### get 
 GET http://api-gateway.ecp-dev.svc.cluster.local/api/order-analyser/health/live
 Accept: application/json
+
+### http://api-gateway.ecp-dev.svc.cluster.local/api/order/
+GET http://api-gateway.ecp-dev.svc.cluster.local/api/order
+Accept: application/json

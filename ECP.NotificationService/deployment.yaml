@@ -1,0 +1,212 @@
+---
+# ──────────────────────────────────────────────────────────────────────────────
+# Namespace
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ecp-dev
+  labels:
+    name: ecp-dev
+    environment: development
+
+---
+# ──────────────────────────────────────────────────────────────────────────────
+# Secret — MongoDB credentials
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ecp-notification-secrets
+  namespace: ecp-dev
+type: Opaque
+stringData:
+  mongo-connection: "mongodb://root:pass168@mongodb.ecp-dev.svc.cluster.local:27017"
+
+---
+# ──────────────────────────────────────────────────────────────────────────────
+# Deployment
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecp-notification
+  namespace: ecp-dev
+  labels:
+    app: ecp-notification
+    app.kubernetes.io/name: ecp-notification
+    version: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ecp-notification
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: ecp-notification
+        app.kubernetes.io/name: ecp-notification
+        version: dev
+    spec:
+      # ── Wait for Kafka + MongoDB before starting ─────────────────────────────
+      initContainers:
+        - name: wait-for-kafka
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z kafka.ecp-dev.svc.cluster.local 9092; do
+                echo "Waiting for Kafka..."
+                sleep 3
+              done
+              echo "Kafka is ready!"
+        - name: wait-for-mongodb
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z mongodb.ecp-dev.svc.cluster.local 27017; do
+                echo "Waiting for MongoDB..."
+                sleep 3
+              done
+              echo "MongoDB is ready!"
+
+      containers:
+        - name: ecp-notification
+          image: ecp-notification:dev
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Development"
+            - name: ASPNETCORE_URLS
+              value: "http://+:8080"
+
+            # ── Kafka — overrides localhost in Program.cs ─────────────────────
+            - name: Kafka__BootstrapServers
+              value: "kafka.ecp-dev.svc.cluster.local:9092"
+
+            # ── MongoDB ───────────────────────────────────────────────────────
+            - name: ConnectionStrings__MongoDb
+              valueFrom:
+                secretKeyRef:
+                  name: ecp-notification-secrets
+                  key: mongo-connection
+
+            # ── Inter-service calls via ClusterDNS ────────────────────────────
+            - name: Services__OrderUrl
+              value: "http://ecp-order.ecp-dev.svc.cluster.local"
+            - name: Services__PaymentUrl
+              value: "http://ecp-payment.ecp-dev.svc.cluster.local"
+
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+      restartPolicy: Always
+
+---
+# ──────────────────────────────────────────────────────────────────────────────
+# Service (ClusterIP)
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: ecp-notification
+  namespace: ecp-dev
+  labels:
+    app: ecp-notification
+    app.kubernetes.io/name: ecp-notification
+spec:
+  type: ClusterIP
+  selector:
+    app: ecp-notification
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+  sessionAffinity: None
+
+---
+# ──────────────────────────────────────────────────────────────────────────────
+# Ingress — Gateway (YARP) auto-discovers via annotations
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecp-notification-ingress
+  namespace: ecp-dev
+  labels:
+    app: ecp-notification
+    app.kubernetes.io/name: ecp-notification
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+
+    # ── CORS ──────────────────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,Authorization,Content-Type,X-Correlation-ID"
+
+    # ── Timeouts ──────────────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+
+    # ── Gateway (YARP) Discovery ──────────────────────────────────────────────
+    # Route: /api/notification/{**catch-all}
+    #   → strips /api/notification
+    #   → forwards to http://ecp-notification.ecp-dev.svc.cluster.local/{catch-all}
+    proxy.gateway/enabled: "true"
+    proxy.gateway/route-path: "/api/notification/{**catch-all}"
+    proxy.gateway/strip-prefix: "true"
+    proxy.gateway/health-path: "/health"
+    proxy.gateway/destination-url: "http://ecp-notification.ecp-dev.svc.cluster.local"
+
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: ecp-notification.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ecp-notification
+                port:
+                  number: 80

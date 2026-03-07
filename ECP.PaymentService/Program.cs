@@ -5,6 +5,7 @@ using MassTransit;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddMassTransit(x =>
@@ -18,7 +19,8 @@ builder.Services.AddMassTransit(x =>
         rider.AddConsumer(typeof(ProcessPaymentConsumer));
         rider.UsingKafka((context, k) =>
         {
-            k.Host("localhost:9092");
+            // k.Host("localhost:9092");
+            k.Host(builder.Configuration["Kafka:BootstrapServers"] ?? "kafka.ecp-dev.svc.cluster.local");
             
             k.TopicEndpoint<RequestPayment>(
                 "request-payment",
@@ -48,4 +50,5 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.MapHealthChecks("/health");
 app.Run();
