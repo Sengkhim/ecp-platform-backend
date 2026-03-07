@@ -1,38 +1,32 @@
 using System.Text.Json;
 using Contracts;
 using ECP.OrderService.Application.Contracts.Events;
+using ECP.Saga.Orchestrator.Activities;
+using ECP.Saga.Orchestrator.Infrastructure;
 using ECP.Saga.Orchestrator.StateData;
 using MassTransit;
-using Microsoft.Extensions.Logging;
 
 namespace ECP.Saga.Orchestrator.Activities;
 
-/// <summary>
-/// Publishes a <see cref="CheckInventoryEvent"/> command to the inventory service
-/// when a new order is created.
-///
-/// The inventory service will check stock levels and respond with either
-/// <see cref="InventoryReserved"/> (success) or <see cref="InventoryFailed"/> (failure).
-/// </summary>
 public sealed class CheckInventoryActivity :
     IStateMachineActivity<OrderState, OrderCreatedEvent>
 {
     private readonly ITopicProducer<CheckInventoryEvent> _producer;
+    private readonly SagaErrorLogger _errorLogger;
     private readonly ILogger<CheckInventoryActivity> _logger;
 
     public CheckInventoryActivity(
         ITopicProducer<CheckInventoryEvent> producer,
+        SagaErrorLogger errorLogger,
         ILogger<CheckInventoryActivity> logger)
     {
-        _producer = producer;
-        _logger   = logger;
+        _producer    = producer;
+        _errorLogger = errorLogger;
+        _logger      = logger;
     }
 
-    public void Probe(ProbeContext context)
-        => context.CreateScope("check-inventory");
-
-    public void Accept(StateMachineVisitor visitor)
-        => visitor.Visit(this);
+    public void Probe(ProbeContext context) => context.CreateScope("check-inventory");
+    public void Accept(StateMachineVisitor visitor) => visitor.Visit(this);
 
     public async Task Execute(
         BehaviorContext<OrderState, OrderCreatedEvent> context,
@@ -42,8 +36,7 @@ public sealed class CheckInventoryActivity :
 
         try
         {
-            // Deserialize items from saga state to send to inventory service
-            var items = JsonSerializer.Deserialize<List<OrderItemInfoEvent>>(
+            var items = JsonSerializer.Deserialize(
                 saga.Items,
                 OrderSagaJsonContext.Default.ListOrderItemInfoEvent)!;
 
@@ -53,17 +46,18 @@ public sealed class CheckInventoryActivity :
 
             _logger.LogInformation(
                 "Inventory check requested for Order {OrderId} with {ItemCount} items",
-                saga.OrderId,
-                items.Count);
+                saga.OrderId, items.Count);
         }
         catch (Exception ex)
         {
-            saga.LastExceptionDetail = $"[{ex.GetType().Name}] {ex.Message}";
-            saga.LastUpdatedAt       = DateTime.UtcNow;
+            CompensationCore.StampException(saga, ex);
+
+            await _errorLogger.LogExceptionAsync(
+                saga.CorrelationId, saga.OrderId, saga.CurrentState,
+                "CheckInventory", ex, context.CancellationToken);
 
             _logger.LogError(ex,
-                "Failed to request inventory check for Order {OrderId}",
-                saga.OrderId);
+                "Failed to request inventory check for Order {OrderId}", saga.OrderId);
 
             throw;
         }
@@ -71,19 +65,20 @@ public sealed class CheckInventoryActivity :
         await next.Execute(context);
     }
 
-    public Task Faulted<TException>(
+    public async Task Faulted<TException>(
         BehaviorExceptionContext<OrderState, OrderCreatedEvent, TException> context,
         IBehavior<OrderState, OrderCreatedEvent> next)
         where TException : Exception
     {
-        context.Saga.LastExceptionDetail =
-            $"[{context.Exception.GetType().Name}] {context.Exception.Message}";
-        context.Saga.LastUpdatedAt = DateTime.UtcNow;
+        CompensationCore.StampException(context.Saga, context.Exception);
+
+        await _errorLogger.LogExceptionAsync(
+            context.Saga.CorrelationId, context.Saga.OrderId, context.Saga.CurrentState,
+            "CheckInventory.Faulted", context.Exception, context.CancellationToken);
 
         _logger.LogError(context.Exception,
-            "CheckInventoryActivity faulted for Order {OrderId}",
-            context.Saga.OrderId);
+            "CheckInventoryActivity faulted for Order {OrderId}", context.Saga.OrderId);
 
-        return next.Faulted(context);
+        await next.Faulted(context);
     }
 }
