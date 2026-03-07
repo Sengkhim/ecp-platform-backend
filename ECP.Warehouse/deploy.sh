@@ -8,24 +8,18 @@ echo "=========================================="
 
 echo ""
 echo "=========================================="
-echo "Rebuild image and loading local Docker image to Minikube"
+echo "Rebuild image for OrbStack Kubernetes"
 echo "=========================================="
 
-# docker build -t ecp-warehouse:dev .
-
-# Load the local image into Minikube
-# sudo minikube image load ecp-warehouse:dev
+# OrbStack shares local Docker images directly — no image load needed!
+docker build -t ecp-warehouse:dev .
 
 echo ""
-echo "Verifying image is loaded:"
-# minikube image ls | grep ecp-warehouse
+echo "Verifying image is built:"
+docker images | grep ecp-warehouse
 
 # Apply the updated deployment
-sudo kubectl apply -f deployment.yaml
-
-#echo ""
-#echo "Waiting for rollout to complete..."
-#kubectl rollout status deployment/order-analy-service -n ecp-dev --timeout=120s
+kubectl apply -f deployment.yaml
 
 echo ""
 echo "=========================================="

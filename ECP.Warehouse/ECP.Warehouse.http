@@ -1,7 +1,9 @@
 #@HostAddress = http://localhost
 @HostAddress = http://172.20.10.10
 
-GET http://172.20.10.10/
+GET http://localhost
 Accept: application/json
 
 ###
+GET http://ecp-warehouse.ecp-dev.svc.cluster.local
+Accept: application/json
