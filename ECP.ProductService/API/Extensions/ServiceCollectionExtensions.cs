@@ -8,7 +8,6 @@ using ECP.ProductService.Infrastructure.GraphQL.Filters;
 using ECP.ProductService.Infrastructure.GraphQL.Mutations;
 using ECP.ProductService.Infrastructure.GraphQL.Queries;
 using ECP.ProductService.Infrastructure.GraphQL.Types;
-using ECP.ProductService.Infrastructure.Persistence;
 using ECP.ProductService.Infrastructure.Persistence.Repositories;
 using FluentValidation;
 using MediatR;
@@ -20,91 +19,89 @@ namespace ECP.ProductService.API.Extensions;
 public static class ServiceCollectionExtensions
 {
     // ── MongoDB ───────────────────────────────────────────────────────────────
-    public static IServiceCollection AddMongoDB(
-        this IServiceCollection services, IConfiguration cfg)
+    extension(IServiceCollection services)
     {
-        var cs = cfg["MongoDB__ConnectionString"]
-              ?? "mongodb://root:pass168@mongodb.ecp-dev.svc.cluster.local:27017";
-        var db = cfg["MongoDB__Database"] ?? "product_service";
-
-        services.AddSingleton<IMongoClient>(_ => new MongoClient(cs));
-        services.AddSingleton<IMongoDatabase>(sp =>
-            sp.GetRequiredService<IMongoClient>().GetDatabase(db));
-        services.AddScoped<IProductRepository, MongoProductRepository>();
-
-        return services;
-    }
-
-    // ── Redis ─────────────────────────────────────────────────────────────────
-    public static IServiceCollection AddRedisCache(
-        this IServiceCollection services, IConfiguration cfg)
-    {
-        var cs = cfg["Redis__ConnectionString"]
-              ?? "redis.ecp-dev.svc.cluster.local:6379";
-
-        services.AddSingleton<IConnectionMultiplexer>(
-            _ => ConnectionMultiplexer.Connect(cs));
-        services.AddSingleton<ICacheService, RedisCacheService>();
-
-        return services;
-    }
-
-    // ── Application layer (MediatR + FluentValidation) ────────────────────────
-    public static IServiceCollection AddApplicationLayer(
-        this IServiceCollection services)
-    {
-        // MediatR — discovers all handlers from this assembly
-        services.AddMediatR(cfg =>
+        public IServiceCollection AddMongoDb(IConfiguration cfg)
         {
-            cfg.RegisterServicesFromAssemblyContaining<CreateProductValidator>();
-            // Pipeline order: logging → validation → handler
-            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
-            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
-        });
+            var cs = cfg["MongoDB__ConnectionString"]
+                     ?? "mongodb://root:pass168@mongodb.ecp-dev.svc.cluster.local:27017";
+            var db = cfg["MongoDB__Database"] ?? "products";
 
-        // FluentValidation — auto-registers all IValidator<T> in assembly
-        services.AddValidatorsFromAssemblyContaining<CreateProductValidator>();
+            services.AddSingleton<IMongoClient>(_ => new MongoClient(cs));
+            services.AddSingleton<IMongoDatabase>(sp => sp.GetRequiredService<IMongoClient>().GetDatabase(db));
+            services.AddScoped<IProductRepository, MongoProductRepository>();
 
-        return services;
-    }
+            return services;
+        }
 
-    // ── GraphQL ───────────────────────────────────────────────────────────────
-    public static IServiceCollection AddGraphQLServices(
-        this IServiceCollection services, IHostEnvironment env)
-    {
-        services
-            .AddGraphQLServer()
-            .AddQueryType<ProductQueries>()
-            .AddMutationType<ProductMutations>()
-            .AddType<ProductType>()
-            .AddType<ProductSummaryType>()
-            .AddType<PagedProductResultType>()
-            .AddDataLoader<ProductByIdDataLoader>()
-            .AddErrorFilter<ProductErrorFilter>()
-            .AddInMemorySubscriptions()
-            .ModifyRequestOptions(opt =>
+        public IServiceCollection AddRedisCache(IConfiguration cfg)
+        {
+            var cs = cfg["Redis__ConnectionString"] ?? "redis.ecp-dev.svc.cluster.local:6379";
+
+            services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(cs));
+            services.AddSingleton<ICacheService, RedisCacheService>();
+
+            return services;
+        }
+
+        public IServiceCollection AddApplicationLayer()
+        {
+            services.AddMediatR(cfg =>
             {
-                // Show exception details only in development
-                opt.IncludeExceptionDetails = env.IsDevelopment();
+                cfg.RegisterServicesFromAssemblyContaining<CreateProductValidator>();
+                cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+                cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
             });
 
-        return services;
-    }
+            services.AddValidatorsFromAssemblyContaining<CreateProductValidator>();
 
-    // ── Health checks ─────────────────────────────────────────────────────────
-    public static IServiceCollection AddServiceHealthChecks(
-        this IServiceCollection services, IConfiguration cfg)
-    {
-        var mongo = cfg["MongoDB__ConnectionString"]
-                 ?? "mongodb://root:pass168@mongodb.ecp-dev.svc.cluster.local:27017";
-        var redis = cfg["Redis__ConnectionString"]
-                 ?? "redis.ecp-dev.svc.cluster.local:6379";
+            return services;
+        }
 
-        services
-            .AddHealthChecks()
-            .AddMongoDb(mongo, name: "mongodb", tags: ["db"])
-            .AddRedis(redis,   name: "redis",   tags: ["cache"]);
+        public IServiceCollection AddGraphQlServices(IHostEnvironment env)
+        {
+            services
+                .AddGraphQLServer()
+        
+                // ── Root operation types (required by HC schema builder) ──────────
+                .AddQueryType<RootQueryType>()
+                .AddMutationType<RootMutationType>()
 
-        return services;
+                // ── Type extensions — merged into the root types above ────────────
+                .AddTypeExtension<ProductQueries>()
+                .AddTypeExtension<ProductMutations>()
+
+                // ── Output types ──────────────────────────────────────────────────
+                .AddType<ProductType>()
+                .AddType<ProductSummaryType>()
+                .AddType<PagedProductSummaryResultType>()
+                .AddType<ProductSpecType>()
+
+                // ── DataLoader ────────────────────────────────────────────────────
+                .AddDataLoader<ProductByIdDataLoader>()
+
+                // ── Error handling ────────────────────────────────────────────────
+                .AddErrorFilter<ProductErrorFilter>()
+
+                // ── Subscriptions ─────────────────────────────────────────────────
+                .AddInMemorySubscriptions()
+
+                .ModifyRequestOptions(opt =>
+                {
+                    opt.IncludeExceptionDetails = env.IsDevelopment();
+                });
+
+            return services;
+        }
+
+        public void AddServiceHealthChecks(IConfiguration cfg)
+        {
+            var redis = cfg["Redis__ConnectionString"] ?? "redis.ecp-dev.svc.cluster.local:6379";
+
+            services
+                .AddHealthChecks()
+                .AddMongoDb(name: "mongodb", tags: ["db"])
+                .AddRedis(redis,   name: "redis",   tags: ["cache"]);
+        }
     }
 }

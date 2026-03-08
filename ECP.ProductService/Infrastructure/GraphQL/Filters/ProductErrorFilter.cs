@@ -1,40 +1,38 @@
 using ECP.ProductService.Core.Exceptions;
-using ValidationException = ECP.ProductService.Core.Exceptions.ValidationException;
+using HotChocolate;
 
 namespace ECP.ProductService.Infrastructure.GraphQL.Filters;
 
 /// <summary>
 /// Translates domain and application exceptions into structured GraphQL errors.
-/// Prevents raw stack traces from leaking to clients in production.
+///
+/// Guarantees:
+///   - Domain exceptions surface with readable codes and messages.
+///   - No stack traces or internal details leak to clients.
+///   - Unhandled exceptions get a generic INTERNAL_ERROR code (HC default masking).
 /// </summary>
 public sealed class ProductErrorFilter : IErrorFilter
 {
-    public IError OnError(IError error)
+    public IError OnError(IError error) => error.Exception switch
     {
-        return error.Exception switch
-        {
-            ProductNotFoundException ex => error
-                .WithCode("PRODUCT_NOT_FOUND")
-                .WithMessage(ex.Message),
+        ProductNotFoundException ex     => Clean(error, ex.Code, ex.Message),
+        ProductNameConflictException ex => Clean(error, ex.Code, ex.Message),
+        InsufficientStockException ex   => Clean(error, ex.Code, ex.Message),
+        ConcurrencyException ex         => Clean(error, ex.Code, ex.Message),
+        ProductArchivedExcepion ex      => Clean(error, ex.Code, ex.Message),
 
-            ProductAlreadyExistsException ex => error
-                .WithCode("PRODUCT_ALREADY_EXISTS")
-                .WithMessage(ex.Message),
+        AppValidationException ex => error
+            .WithCode(ex.Code)
+            .WithMessage(ex.Message)
+            .SetExtension("validationErrors", ex.Errors)
+            .RemoveException(),
 
-            InsufficientStockException ex => error
-                .WithCode("INSUFFICIENT_STOCK")
-                .WithMessage(ex.Message),
+        ArgumentException ex => Clean(error, "INVALID_ARGUMENT", ex.Message),
+        InvalidOperationException ex => Clean(error, "DOMAIN_RULE_VIOLATION", ex.Message),
 
-            DomainException ex => error
-                .WithCode("DOMAIN_ERROR")
-                .WithMessage(ex.Message),
+        _ => error // let HotChocolate apply its default masking
+    };
 
-            ValidationException ex => error
-                .WithCode("VALIDATION_ERROR")
-                .WithMessage("One or more validation errors occurred.")
-                .SetExtension("errors", ex.Errors) ,
-
-            _ => error // unhandled — default HC behaviour (masked in prod)
-        };
-    }
+    private static IError Clean(IError error, string code, string message)
+        => error.WithCode(code).WithMessage(message).RemoveException();
 }

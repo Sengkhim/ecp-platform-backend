@@ -2,6 +2,7 @@ using ECP.ProductService.Application.DTOs;
 using ECP.ProductService.Application.Mappings;
 using ECP.ProductService.Core.Domain.ValueObjects;
 using ECP.ProductService.Core.Interfaces.Repositories;
+using GreenDonut;
 
 namespace ECP.ProductService.Infrastructure.GraphQL.DataLoaders;
 

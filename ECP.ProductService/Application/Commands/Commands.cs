@@ -4,8 +4,7 @@ using MediatR;
 namespace ECP.ProductService.Application.Commands;
 
 // ── Create ────────────────────────────────────────────────────────────────────
-
-public record CreateProductCommand(
+public sealed record CreateProductCommand(
     string   Name,
     string   Description,
     decimal  Price,
@@ -13,48 +12,39 @@ public record CreateProductCommand(
     Guid     CategoryId,
     string   Brand,
     int      InitialStock,
-    IEnumerable<string>?               Tags       = null,
-    IEnumerable<string>?               Images     = null,
-    IDictionary<string, string>?       Attributes = null) : IRequest<ProductDto>;
+    List<string>?               Tags       = null,
+    List<string>?               Images     = null,
+    Dictionary<string,string>?  Attributes = null
+) : IRequest<ProductDto>;
 
-// ── Update ────────────────────────────────────────────────────────────────────
+// ── Update details ────────────────────────────────────────────────────────────
+public sealed record UpdateProductCommand(
+    Guid   Id,
+    string Name,
+    string Description,
+    string Brand,
+    List<string>?               Tags       = null,
+    List<string>?               Images     = null,
+    Dictionary<string,string>?  Attributes = null
+) : IRequest<ProductDto>;
 
-public record UpdateProductCommand(
-    Guid     Id,
-    string   Name,
-    string   Description,
-    string   Brand,
-    IEnumerable<string>?               Tags       = null,
-    IEnumerable<string>?               Images     = null,
-    IDictionary<string, string>?       Attributes = null) : IRequest<ProductDto>;
-
-public record UpdateProductPriceCommand(
+// ── Pricing ───────────────────────────────────────────────────────────────────
+public sealed record UpdatePriceCommand(
     Guid     Id,
     decimal  Price,
     string   Currency,
-    decimal? SalePrice = null) : IRequest<ProductDto>;
+    decimal? SalePrice = null
+) : IRequest<ProductDto>;
 
 // ── Stock ─────────────────────────────────────────────────────────────────────
-
-public record AdjustStockCommand(
-    Guid   Id,
-    int    Delta,
-    string Reason) : IRequest<ProductDto>;
-
-public record ReserveStockCommand(
-    Guid Id,
-    int  Quantity) : IRequest<ProductDto>;
-
-public record ReleaseStockCommand(
-    Guid Id,
-    int  Quantity) : IRequest<ProductDto>;
+public sealed record AdjustStockCommand(Guid Id, int Delta, string Reason)  : IRequest<ProductDto>;
+public sealed record ReserveStockCommand(Guid Id, int Quantity)              : IRequest<ProductDto>;
+public sealed record ReleaseStockCommand(Guid Id, int Quantity)              : IRequest<ProductDto>;
 
 // ── Status ────────────────────────────────────────────────────────────────────
-
-public record ActivateProductCommand(Guid Id)   : IRequest<ProductDto>;
-public record DeactivateProductCommand(Guid Id) : IRequest<ProductDto>;
-public record ArchiveProductCommand(Guid Id)    : IRequest<ProductDto>;
+public sealed record PublishProductCommand(Guid Id)    : IRequest<ProductDto>;
+public sealed record DeactivateProductCommand(Guid Id) : IRequest<ProductDto>;
+public sealed record ArchiveProductCommand(Guid Id)    : IRequest<ProductDto>;
 
 // ── Delete ────────────────────────────────────────────────────────────────────
-
-public record DeleteProductCommand(Guid Id) : IRequest<bool>;
+public sealed record DeleteProductCommand(Guid Id) : IRequest<bool>;

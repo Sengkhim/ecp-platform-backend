@@ -8,35 +8,51 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Content Include="..\.dockerignore">
+            <Link>.dockerignore</Link>
+        </Content>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- GraphQL IDE -->
+        <PackageReference Include="ChilliCream.Nitro.App" Version="29.0.1" />
+
+        <!-- MediatR -->
+        <PackageReference Include="MediatR" Version="12.4.1" />
+
+        <!-- Validation -->
+        <PackageReference Include="FluentValidation" Version="11.11.0" />
+        <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.11.0" />
+
+        <!-- MongoDB v3 -->
+        <PackageReference Include="MongoDB.Driver" Version="3.4.0" />
+
+        <!-- Redis -->
+        <PackageReference Include="StackExchange.Redis" Version="2.8.24" />
+        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.0" />
+
+        <!-- GraphQL - HotChocolate v14 -->
+        <PackageReference Include="HotChocolate.AspNetCore" Version="14.3.0" />
+        <PackageReference Include="HotChocolate.Data" Version="14.3.0" />
+        <PackageReference Include="HotChocolate.Data.MongoDB" Version="14.3.0" />
+        <PackageReference Include="HotChocolate.Subscriptions.InMemory" Version="14.3.0" />
+
+        <!-- Health checks — 9.0.0 is the FIRST version supporting MongoDB.Driver v3
+             v8.x requires MongoDB.Driver.Core v2.28 → FileNotFoundException at runtime -->
         <PackageReference Include="AspNetCore.HealthChecks.MongoDb" Version="9.0.0" />
         <PackageReference Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
         <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.0" />
-        <PackageReference Include="FluentValidation" Version="12.1.1" />
-        <PackageReference Include="GraphQL" Version="8.8.3" />
-        <PackageReference Include="HotChocolate" Version="15.1.12" />
-        <PackageReference Include="HotChocolate.AspNetCore" Version="15.1.12" />
-        <PackageReference Include="MediatR" Version="14.1.0" />
-        <PackageReference Include="Microsoft.AspNetCore.Diagnostics.HealthChecks" Version="2.2.0" />
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
-        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.3" />
-        <PackageReference Include="MongoDB.Driver" Version="3.4.2" />
-        <PackageReference Include="Serilog" Version="4.3.2-dev-02419" />
-        <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
-        <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
-        <PackageReference Include="Serilog.Settings.Configuration" Version="10.0.0" />
-        <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
-        <PackageReference Include="Serilog.Sinks.File" Version="8.0.0-nblumhardt-02322" />
-        <PackageReference Include="StackExchange.Redis" Version="2.11.8" />
-    </ItemGroup>
 
-    <ItemGroup>
-      <Content Include="..\.dockerignore">
-        <Link>.dockerignore</Link>
-      </Content>
-    </ItemGroup>
-
-    <ItemGroup>
-      <ProjectReference Include="..\ECP.ApiGateway\ECP.ApiGateway.csproj" />
+        <!-- Observability -->
+        <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
+        <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+        <PackageReference Include="Serilog.Sinks.Seq" Version="8.0.0" />
+        <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.11.2" />
+        <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.11.1" />
     </ItemGroup>
 
 </Project>

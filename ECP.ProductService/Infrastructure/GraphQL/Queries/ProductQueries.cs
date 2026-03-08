@@ -1,44 +1,45 @@
 using ECP.ProductService.Application.DTOs;
 using ECP.ProductService.Application.Queries;
+using ECP.ProductService.Infrastructure.GraphQL.DataLoaders;
 using ECP.ProductService.Infrastructure.GraphQL.Types;
-using HotChocolate;
-using HotChocolate.Types;
 using MediatR;
 
 namespace ECP.ProductService.Infrastructure.GraphQL.Queries;
 
-[QueryType]
+// No [QueryType] attribute — registered explicitly via .AddQueryType<ProductQueries>()
+// combined with a root Query type defined in RootQueryType.cs
+[ExtendObjectType(OperationTypeNames.Query)]
 public sealed class ProductQueries
 {
-    [GraphQLDescription("Get a product by its unique ID.")]
-    public async Task<ProductDto?> GetProduct(
+    [GraphQLDescription("Fetch a product by its unique ID.")]
+    public Task<ProductDto?> GetProduct(
         Guid id,
-        [Service] ISender mediator,
+        ProductByIdDataLoader loader,
         CancellationToken ct)
-        => await mediator.Send(new GetProductByIdQuery(id), ct);
+        => loader.LoadAsync(id, ct)!;
 
-    [GraphQLDescription("Get a product by its URL slug.")]
-    public async Task<ProductDto?> GetProductBySlug(
+    [GraphQLDescription("Fetch a product by its URL slug.")]
+    public Task<ProductDto?> GetProductBySlug(
         string slug,
-        [Service] ISender mediator,
+        ISender mediator,
         CancellationToken ct)
-        => await mediator.Send(new GetProductBySlugQuery(slug), ct);
+        => mediator.Send(new GetProductBySlugQuery(slug), ct);
 
-    [GraphQLDescription("Get all products in a category (paginated).")]
-    public async Task<PagedResult<ProductSummaryDto>> GetProductsByCategory(
+    [GraphQLDescription("Browse products in a category (paginated, newest first).")]
+    public Task<PagedResult<ProductSummaryDto>> GetProductsByCategory(
         Guid categoryId,
         int  skip,
         int  take,
-        [Service] ISender mediator,
+        ISender mediator,
         CancellationToken ct)
-        => await mediator.Send(new GetProductsByCategoryQuery(categoryId, skip, take), ct);
+        => mediator.Send(new GetProductsByCategoryQuery(categoryId, skip, take), ct);
 
-    [GraphQLDescription("Full-text search across products with filtering and sorting.")]
-    public async Task<PagedResult<ProductSummaryDto>> SearchProducts(
+    [GraphQLDescription("Search products with full-text keyword, filters, and sorting.")]
+    public Task<PagedResult<ProductSummaryDto>> SearchProducts(
         SearchProductsInput input,
-        [Service] ISender mediator,
+        ISender mediator,
         CancellationToken ct)
-        => await mediator.Send(new SearchProductsQuery(
+        => mediator.Send(new SearchProductsQuery(
             Keyword:    input.Keyword,
             CategoryId: input.CategoryId,
             Brand:      input.Brand,
@@ -50,10 +51,10 @@ public sealed class ProductQueries
             Skip:       input.Skip,
             Take:       input.Take), ct);
 
-    [GraphQLDescription("Batch-load multiple products by IDs (for DataLoader scenarios).")]
-    public async Task<IReadOnlyList<ProductDto>> GetProductsByIds(
+    [GraphQLDescription("Batch-fetch multiple products by ID list.")]
+    public Task<IReadOnlyList<ProductDto>> GetProductsByIds(
         List<Guid> ids,
-        [Service] ISender mediator,
+        ISender mediator,
         CancellationToken ct)
-        => await mediator.Send(new GetProductsByIdsQuery(ids), ct);
+        => mediator.Send(new GetProductsByIdsQuery(ids), ct);
 }

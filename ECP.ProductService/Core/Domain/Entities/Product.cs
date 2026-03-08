@@ -1,182 +1,281 @@
 using ECP.ProductService.Core.Domain.Enums;
+using ECP.ProductService.Core.Domain.Events;
 using ECP.ProductService.Core.Domain.ValueObjects;
-using ECP.ProductService.Core.Exceptions;
 
 namespace ECP.ProductService.Core.Domain.Entities;
 
 /// <summary>
 /// Product aggregate root.
-/// All state changes go through domain methods — no public setters.
+///
+/// Rules:
+///   - All state changes go through domain methods. No public setters.
+///   - Business invariants are enforced in every method before state mutates.
+///   - Domain events are collected and dispatched AFTER the aggregate is saved
+///     so they reflect committed state, not optimistic state.
+///   - Version is incremented on every mutation for optimistic concurrency.
 /// </summary>
 public sealed class Product
 {
-    public ProductId    Id          { get; private set; }
-    public string       Name        { get; private set; }
-    public string       Slug        { get; private set; }
-    public string       Description { get; private set; }
-    public Money        Price       { get; private set; }
-    public Money?       SalePrice   { get; private set; }
-    public CategoryId   CategoryId  { get; private set; }
-    public string       Brand       { get; private set; }
-    public StockInfo    Stock       { get; private set; }
-    public ProductStatus Status     { get; private set; }
-    public IReadOnlyList<string> Tags   { get; private set; }
-    public IReadOnlyList<string> Images { get; private set; }
-    public IReadOnlyDictionary<string, string> Attributes { get; private set; }
-    public DateTime     CreatedAt   { get; private set; }
-    public DateTime     UpdatedAt   { get; private set; }
-    public int          Version     { get; private set; }
+    // ── Identity ──────────────────────────────────────────────────────────────
+    public ProductId  Id         { get; private set; }
+    public Slug       Slug       { get; private set; }
 
+    // ── Catalog data ──────────────────────────────────────────────────────────
+    public string     Name        { get; private set; } = string.Empty;
+    public string     Description { get; private set; } = string.Empty;
+    public string     Brand       { get; private set; } = string.Empty;
+    public CategoryId CategoryId  { get; private set; }
+
+    // ── Pricing ───────────────────────────────────────────────────────────────
+    public Money      Price     { get; private set; } = null!;
+    public Money?     SalePrice { get; private set; }
+
+    // ── Stock ─────────────────────────────────────────────────────────────────
+    public StockInfo  Stock { get; private set; } = null!;
+
+    // ── Classification ────────────────────────────────────────────────────────
+    public ProductStatus            Status     { get; private set; }
+    public IReadOnlyList<string>    Tags       { get; private set; } = [];
+    public IReadOnlyList<string>    Images     { get; private set; } = [];
+    public IReadOnlyDictionary<string, string> Attributes { get; private set; }
+        = new Dictionary<string, string>();
+
+    // ── Audit ─────────────────────────────────────────────────────────────────
+    public DateTime CreatedAt  { get; private set; }
+    public DateTime UpdatedAt  { get; private set; }
+    public int      Version    { get; private set; }
+
+    // ── Domain events (dispatched after save, not part of persistence) ────────
+    private readonly List<IDomainEvent> _domainEvents = [];
+    public IReadOnlyList<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
+    public void ClearDomainEvents() => _domainEvents.Clear();
+
+    // ── Private constructor — use factory methods ─────────────────────────────
     private Product() { }
 
-    public static Product Create(
-        string name,
-        string description,
-        Money price,
-        CategoryId categoryId,
-        string brand,
-        int initialStock,
-        IEnumerable<string>? tags       = null,
-        IEnumerable<string>? images     = null,
-        IDictionary<string, string>? attributes = null)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            throw new DomainException("Product name is required.");
+    // -------------------------------------------------------------------------
+    // Factory
+    // -------------------------------------------------------------------------
 
-        if (string.IsNullOrWhiteSpace(brand))
-            throw new DomainException("Product brand is required.");
+    public static Product Create(
+        string   name,
+        string   description,
+        Money    price,
+        CategoryId categoryId,
+        string   brand,
+        int      initialStock,
+        IEnumerable<string>?               tags       = null,
+        IEnumerable<string>?               images     = null,
+        IDictionary<string, string>?       attributes = null)
+    {
+        GuardName(name);
+        GuardBrand(brand);
 
         if (initialStock < 0)
-            throw new DomainException("Initial stock cannot be negative.");
+            throw new ArgumentException("Initial stock cannot be negative.", nameof(initialStock));
 
         var now = DateTime.UtcNow;
 
-        return new Product
+        var product = new Product
         {
             Id          = ProductId.New(),
+            Slug        = Slug.From(name),
             Name        = name.Trim(),
-            Slug        = GenerateSlug(name),
-            Description = description?.Trim() ?? string.Empty,
-            Price       = price,
-            CategoryId  = categoryId,
+            Description = description.Trim(),
             Brand       = brand.Trim(),
+            CategoryId  = categoryId,
+            Price       = price,
+            SalePrice   = null,
             Stock       = StockInfo.Create(initialStock),
-            Status      = initialStock > 0 ? ProductStatus.Active : ProductStatus.OutOfStock,
-            Tags        = (tags ?? []).ToList().AsReadOnly(),
-            Images      = (images ?? []).ToList().AsReadOnly(),
+            Status      = initialStock > 0 ? ProductStatus.Active : ProductStatus.Draft,
+            Tags        = NormaliseTags(tags),
+            Images      = images?.ToList().AsReadOnly() ?? (IReadOnlyList<string>)[],
             Attributes  = new Dictionary<string, string>(attributes ?? new Dictionary<string, string>()),
             CreatedAt   = now,
             UpdatedAt   = now,
             Version     = 1,
         };
+
+        product._domainEvents.Add(new ProductCreatedEvent(
+            product.Id.Value, product.Name, product.Brand,
+            product.CategoryId.Value, product.Price.Amount, product.Price.Currency));
+
+        return product;
     }
+
+    // -------------------------------------------------------------------------
+    // Catalog updates
+    // -------------------------------------------------------------------------
 
     public void UpdateDetails(
-        string name,
-        string description,
-        string brand,
-        IEnumerable<string>? tags       = null,
-        IEnumerable<string>? images     = null,
-        IDictionary<string, string>? attributes = null)
+        string   name,
+        string   description,
+        string   brand,
+        IEnumerable<string>?               tags       = null,
+        IEnumerable<string>?               images     = null,
+        IDictionary<string, string>?       attributes = null)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            throw new DomainException("Product name is required.");
+        GuardNotArchived();
+        GuardName(name);
+        GuardBrand(brand);
 
         Name        = name.Trim();
-        Slug        = GenerateSlug(name);
-        Description = description?.Trim() ?? string.Empty;
+        Slug        = Slug.From(name);
+        Description = description.Trim();
         Brand       = brand.Trim();
-        Tags        = (tags ?? []).ToList().AsReadOnly();
-        Images      = (images ?? []).ToList().AsReadOnly();
+        Tags        = NormaliseTags(tags);
+        Images      = images?.ToList().AsReadOnly() ?? Images;
         Attributes  = new Dictionary<string, string>(attributes ?? new Dictionary<string, string>());
-        UpdatedAt   = DateTime.UtcNow;
-        Version++;
+        Bump();
+
+        _domainEvents.Add(new ProductUpdatedEvent(Id.Value, Name));
     }
+
+    // -------------------------------------------------------------------------
+    // Pricing
+    // -------------------------------------------------------------------------
 
     public void UpdatePrice(Money price, Money? salePrice = null)
     {
-        if (salePrice is not null && salePrice.Amount >= price.Amount)
-            throw new DomainException("Sale price must be less than the regular price.");
+        GuardNotArchived();
 
+        if (salePrice is not null && !salePrice.IsLessThan(price))
+            throw new InvalidOperationException("Sale price must be strictly less than regular price.");
+
+        var old = Price.Amount;
         Price     = price;
         SalePrice = salePrice;
-        UpdatedAt = DateTime.UtcNow;
-        Version++;
+        Bump();
+
+        if (old != price.Amount)
+            _domainEvents.Add(new ProductPriceChangedEvent(Id.Value, old, price.Amount, price.Currency));
     }
+
+    // -------------------------------------------------------------------------
+    // Stock management
+    // -------------------------------------------------------------------------
 
     public void AdjustStock(int delta, string reason)
     {
-        var newQuantity = Stock.Quantity + delta;
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("Reason is required for stock adjustments.", nameof(reason));
 
-        if (newQuantity < 0)
-            throw new DomainException($"Insufficient stock. Available: {Stock.Quantity}, Requested: {Math.Abs(delta)}.");
+        var oldQty = Stock.Quantity;
+        Stock      = Stock.WithAdjustedQuantity(delta);
+        Status     = ResolveActiveStatus();
+        Bump();
 
-        Stock     = StockInfo.Create(newQuantity, Stock.Reserved);
-        Status    = ResolveStatus();
-        UpdatedAt = DateTime.UtcNow;
-        Version++;
+        _domainEvents.Add(new StockAdjustedEvent(
+            Id.Value, oldQty, Stock.Quantity, delta, reason));
+
+        if (Stock.IsLowStock)
+            _domainEvents.Add(new LowStockWarningEvent(Id.Value, Name, Stock.Available));
     }
 
     public void ReserveStock(int quantity)
     {
         if (quantity <= 0)
-            throw new DomainException("Reserve quantity must be positive.");
+            throw new ArgumentException("Reserve quantity must be positive.", nameof(quantity));
 
-        var available = Stock.Quantity - Stock.Reserved;
-        if (quantity > available)
-            throw new DomainException($"Cannot reserve {quantity} units. Available: {available}.");
+        if (quantity > Stock.Available)
+            throw new InvalidOperationException(
+                $"Cannot reserve {quantity}. Available: {Stock.Available}.");
 
-        Stock     = StockInfo.Create(Stock.Quantity, Stock.Reserved + quantity);
-        UpdatedAt = DateTime.UtcNow;
-        Version++;
+        Stock = Stock.WithReserved(Stock.Reserved + quantity);
+        Bump();
+
+        _domainEvents.Add(new StockReservedEvent(Id.Value, quantity));
     }
 
     public void ReleaseStock(int quantity)
     {
+        if (quantity <= 0)
+            throw new ArgumentException("Release quantity must be positive.", nameof(quantity));
+
         var newReserved = Math.Max(0, Stock.Reserved - quantity);
-        Stock     = StockInfo.Create(Stock.Quantity, newReserved);
-        UpdatedAt = DateTime.UtcNow;
-        Version++;
+        Stock = Stock.WithReserved(newReserved);
+        Bump();
+
+        _domainEvents.Add(new StockReleasedEvent(Id.Value, quantity));
     }
 
-    public void Activate()
-    {
-        if (Stock.Quantity == 0)
-            throw new DomainException("Cannot activate a product with zero stock.");
+    // -------------------------------------------------------------------------
+    // Status transitions
+    // -------------------------------------------------------------------------
 
-        Status    = ProductStatus.Active;
-        UpdatedAt = DateTime.UtcNow;
-        Version++;
+    public void Publish()
+    {
+        if (Status == ProductStatus.Archived)
+            throw new InvalidOperationException("Cannot publish an archived product.");
+
+        if (Stock.Quantity == 0)
+            throw new InvalidOperationException("Cannot publish a product with zero stock.");
+
+        ChangeStatus(ProductStatus.Active);
     }
 
     public void Deactivate()
     {
-        Status    = ProductStatus.Inactive;
-        UpdatedAt = DateTime.UtcNow;
-        Version++;
+        if (Status == ProductStatus.Archived)
+            throw new InvalidOperationException("Cannot deactivate an archived product.");
+
+        ChangeStatus(ProductStatus.Inactive);
     }
 
     public void Archive()
     {
-        Status    = ProductStatus.Archived;
+        if (Status == ProductStatus.Archived) return; // idempotent
+        ChangeStatus(ProductStatus.Archived);
+    }
+
+    // -------------------------------------------------------------------------
+    // Private helpers
+    // -------------------------------------------------------------------------
+
+    private void ChangeStatus(ProductStatus newStatus)
+    {
+        var old = Status.ToString();
+        Status  = newStatus;
+        Bump();
+        _domainEvents.Add(new ProductStatusChangedEvent(Id.Value, old, newStatus.ToString()));
+    }
+
+    private ProductStatus ResolveActiveStatus()
+    {
+        if (Status is ProductStatus.Archived or ProductStatus.Inactive)
+            return Status;
+        return Stock.Quantity > 0 ? ProductStatus.Active : ProductStatus.OutOfStock;
+    }
+
+    private void Bump()
+    {
         UpdatedAt = DateTime.UtcNow;
         Version++;
     }
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
-
-    private ProductStatus ResolveStatus()
+    private static void GuardName(string name)
     {
-        if (Status == ProductStatus.Archived || Status == ProductStatus.Inactive)
-            return Status;
-
-        return Stock.Quantity > 0 ? ProductStatus.Active : ProductStatus.OutOfStock;
+        if (string.IsNullOrWhiteSpace(name))       throw new ArgumentException("Name is required.");
+        if (name.Length > 200)                      throw new ArgumentException("Name must not exceed 200 characters.");
     }
 
-    private static string GenerateSlug(string name)
-        => System.Text.RegularExpressions.Regex
-            .Replace(name.ToLowerInvariant().Trim(), @"[^a-z0-9]+", "-")
-            .Trim('-');
+    private static void GuardBrand(string brand)
+    {
+        if (string.IsNullOrWhiteSpace(brand))       throw new ArgumentException("Brand is required.");
+        if (brand.Length > 100)                     throw new ArgumentException("Brand must not exceed 100 characters.");
+    }
+
+    private void GuardNotArchived()
+    {
+        if (Status == ProductStatus.Archived)
+            throw new InvalidOperationException("Cannot modify an archived product.");
+    }
+
+    private static IReadOnlyList<string> NormaliseTags(IEnumerable<string>? tags)
+        => (tags ?? [])
+            .Select(t => t.Trim().ToLowerInvariant())
+            .Where(t => t.Length > 0)
+            .Distinct()
+            .ToList()
+            .AsReadOnly();
 }

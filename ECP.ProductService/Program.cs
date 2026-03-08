@@ -1,9 +1,12 @@
-using ECP.ApiGateway.Middleware;
-using ECP.ProductService.API.Extensions; 
+using ECP.ProductService.API.Extensions;
+using ECP.ProductService.API.Middleware;
+using ECP.ProductService.Infrastructure.Persistence.Configuration;
 using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Serilog;
 using Serilog.Events;
+
+MongoDbConfiguration.RegisterSerializers();
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
@@ -18,7 +21,7 @@ try
     Log.Information("Starting ECP.ProductService");
 
     var builder = WebApplication.CreateBuilder(args);
-    
+
     builder.Host.UseSerilog((ctx, services, cfg) => cfg
         .ReadFrom.Configuration(ctx.Configuration)
         .ReadFrom.Services(services)
@@ -26,10 +29,10 @@ try
         .WriteTo.Console());
 
     builder.Services
-        .AddMongoDB(builder.Configuration)
+        .AddMongoDb(builder.Configuration)
         .AddRedisCache(builder.Configuration)
         .AddApplicationLayer()
-        .AddGraphQLServices(builder.Environment)
+        .AddGraphQlServices(builder.Environment)
         .AddServiceHealthChecks(builder.Configuration);
 
     var app = builder.Build();
@@ -40,24 +43,22 @@ try
     if (app.Environment.IsDevelopment())
         app.UseDeveloperExceptionPage();
 
-    app.MapGraphQL("/graphql");
+    app.MapGraphQL();
 
     if (app.Environment.IsDevelopment())
-        app.MapNitroApp("/graphql/ui");
-    
+        app.MapNitroApp();
+
     app.MapHealthChecks("/health/live", new HealthCheckOptions
     {
         Predicate = _ => false
     });
 
-    // /health/ready → checks MongoDB + Redis (readiness probe)
     app.MapHealthChecks("/health/ready", new HealthCheckOptions
     {
         Predicate      = hc => hc.Tags.Contains("db") || hc.Tags.Contains("cache"),
         ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
     });
 
-    // /health → all checks combined
     app.MapHealthChecks("/health", new HealthCheckOptions
     {
         Predicate      = _ => true,

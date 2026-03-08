@@ -1,91 +1,90 @@
 using ECP.ProductService.Application.Commands;
 using ECP.ProductService.Application.DTOs;
 using ECP.ProductService.Infrastructure.GraphQL.Types;
-using HotChocolate;
-using HotChocolate.Types;
 using MediatR;
 
 namespace ECP.ProductService.Infrastructure.GraphQL.Mutations;
 
-[MutationType]
+[ExtendObjectType(OperationTypeNames.Mutation)]
 public sealed class ProductMutations
 {
-    [GraphQLDescription("Create a new product in the catalog.")]
-    public async Task<ProductDto> CreateProduct(
+    [GraphQLDescription("Create a new product. Returns the created product with its assigned ID.")]
+    public Task<ProductDto> CreateProduct(
         CreateProductInput input,
-        [Service] ISender mediator,
+        ISender mediator,
         CancellationToken ct)
-        => await mediator.Send(new CreateProductCommand(
-            Name:         input.Name,
-            Description:  input.Description,
-            Price:        input.Price,
-            Currency:     input.Currency,
-            CategoryId:   input.CategoryId,
-            Brand:        input.Brand,
-            InitialStock: input.InitialStock,
-            Tags:         input.Tags,
-            Images:       input.Images,
-            Attributes:   input.Attributes), ct);
+        => mediator.Send(new CreateProductCommand(
+            input.Name, input.Description, input.Price, input.Currency,
+            input.CategoryId, input.Brand, input.InitialStock,
+            input.Tags,
+            input.Images,
+            input.Attributes?.ToDictionary(a => a.Key, a => a.Value)), ct);
 
-    [GraphQLDescription("Update product details (name, description, brand, tags, images, attributes).")]
-    public async Task<ProductDto> UpdateProduct(
+    [GraphQLDescription("Update product name, description, brand, tags, images, and attributes.")]
+    public Task<ProductDto> UpdateProduct(
         UpdateProductInput input,
-        [Service] ISender mediator,
+        ISender mediator,
         CancellationToken ct)
-        => await mediator.Send(new UpdateProductCommand(
-            Id:          input.Id,
-            Name:        input.Name,
-            Description: input.Description,
-            Brand:       input.Brand,
-            Tags:        input.Tags,
-            Images:      input.Images,
-            Attributes:  input.Attributes), ct);
+        => mediator.Send(new UpdateProductCommand(
+            input.Id, input.Name, input.Description, input.Brand,
+            input.Tags,
+            input.Images,
+            input.Attributes?.ToDictionary(a => a.Key, a => a.Value)), ct);
 
-    [GraphQLDescription("Update product price and optional sale price.")]
-    public async Task<ProductDto> UpdateProductPrice(
+    [GraphQLDescription("Update product pricing. Optionally set a sale price below the regular price.")]
+    public Task<ProductDto> UpdatePrice(
         UpdatePriceInput input,
-        [Service] ISender mediator,
+        ISender mediator,
         CancellationToken ct)
-        => await mediator.Send(new UpdateProductPriceCommand(
-            Id:        input.Id,
-            Price:     input.Price,
-            Currency:  input.Currency,
-            SalePrice: input.SalePrice), ct);
+        => mediator.Send(new UpdatePriceCommand(
+            input.Id, input.Price, input.Currency, input.SalePrice), ct);
 
-    [GraphQLDescription("Adjust stock by a delta (positive = restock, negative = consume).")]
-    public async Task<ProductDto> AdjustStock(
+    [GraphQLDescription("Adjust stock by a signed delta (positive = restock, negative = consume).")]
+    public Task<ProductDto> AdjustStock(
         AdjustStockInput input,
-        [Service] ISender mediator,
+        ISender mediator,
         CancellationToken ct)
-        => await mediator.Send(new AdjustStockCommand(input.Id, input.Delta, input.Reason), ct);
+        => mediator.Send(new AdjustStockCommand(input.Id, input.Delta, input.Reason), ct);
 
     [GraphQLDescription("Reserve stock for a pending order.")]
-    public async Task<ProductDto> ReserveStock(
+    public Task<ProductDto> ReserveStock(
         ReserveStockInput input,
-        [Service] ISender mediator,
+        ISender mediator,
         CancellationToken ct)
-        => await mediator.Send(new ReserveStockCommand(input.Id, input.Quantity), ct);
+        => mediator.Send(new ReserveStockCommand(input.Id, input.Quantity), ct);
 
-    [GraphQLDescription("Release previously reserved stock (order cancelled).")]
-    public async Task<ProductDto> ReleaseStock(
+    [GraphQLDescription("Release previously reserved stock (order cancelled or expired).")]
+    public Task<ProductDto> ReleaseStock(
         ReleaseStockInput input,
-        [Service] ISender mediator,
+        ISender mediator,
         CancellationToken ct)
-        => await mediator.Send(new ReleaseStockCommand(input.Id, input.Quantity), ct);
+        => mediator.Send(new ReleaseStockCommand(input.Id, input.Quantity), ct);
 
-    [GraphQLDescription("Activate an inactive or out-of-stock product.")]
-    public async Task<ProductDto> ActivateProduct(Guid id, [Service] ISender mediator, CancellationToken ct)
-        => await mediator.Send(new ActivateProductCommand(id), ct);
+    [GraphQLDescription("Publish a draft or inactive product to the live catalog.")]
+    public Task<ProductDto> PublishProduct(
+        Guid id,
+        ISender mediator,
+        CancellationToken ct)
+        => mediator.Send(new PublishProductCommand(id), ct);
 
     [GraphQLDescription("Deactivate a product (hidden from catalog but not deleted).")]
-    public async Task<ProductDto> DeactivateProduct(Guid id, [Service] ISender mediator, CancellationToken ct)
-        => await mediator.Send(new DeactivateProductCommand(id), ct);
+    public Task<ProductDto> DeactivateProduct(
+        Guid id,
+        ISender mediator,
+        CancellationToken ct)
+        => mediator.Send(new DeactivateProductCommand(id), ct);
 
     [GraphQLDescription("Archive a product permanently.")]
-    public async Task<ProductDto> ArchiveProduct(Guid id, [Service] ISender mediator, CancellationToken ct)
-        => await mediator.Send(new ArchiveProductCommand(id), ct);
+    public Task<ProductDto> ArchiveProduct(
+        Guid id,
+        ISender mediator,
+        CancellationToken ct)
+        => mediator.Send(new ArchiveProductCommand(id), ct);
 
-    [GraphQLDescription("Delete a product permanently.")]
-    public async Task<bool> DeleteProduct(Guid id, [Service] ISender mediator, CancellationToken ct)
-        => await mediator.Send(new DeleteProductCommand(id), ct);
+    [GraphQLDescription("Permanently delete a product from the database.")]
+    public Task<bool> DeleteProduct(
+        Guid id,
+        ISender mediator,
+        CancellationToken ct)
+        => mediator.Send(new DeleteProductCommand(id), ct);
 }

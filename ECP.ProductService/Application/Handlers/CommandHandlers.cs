@@ -10,15 +10,17 @@ using MediatR;
 
 namespace ECP.ProductService.Application.Handlers;
 
+// ── CreateProduct ─────────────────────────────────────────────────────────────
+
 public sealed class CreateProductHandler(
-    IProductRepository repository,
+    IProductRepository repo,
     ICacheService cache)
     : IRequestHandler<CreateProductCommand, ProductDto>
 {
     public async Task<ProductDto> Handle(CreateProductCommand cmd, CancellationToken ct)
     {
-        if (await repository.ExistsByNameAsync(cmd.Name, null, ct))
-            throw new ProductAlreadyExistsException(cmd.Name);
+        if (await repo.ExistsByNameAsync(cmd.Name, null, ct))
+            throw new ProductNameConflictException(cmd.Name);
 
         var product = Product.Create(
             name:         cmd.Name,
@@ -31,181 +33,201 @@ public sealed class CreateProductHandler(
             images:       cmd.Images,
             attributes:   cmd.Attributes);
 
-        await repository.InsertAsync(product, ct);
-
-        await cache.RemoveByPatternAsync(CacheKeys.ProductPattern, ct);
+        await repo.InsertAsync(product, ct);
+        await cache.RemoveByPrefixAsync(CacheKey.ProductPrefix, ct);
 
         return product.ToDto();
     }
 }
 
+// ── UpdateProduct ─────────────────────────────────────────────────────────────
 
 public sealed class UpdateProductHandler(
-    IProductRepository repository,
+    IProductRepository repo,
     ICacheService cache)
     : IRequestHandler<UpdateProductCommand, ProductDto>
 {
     public async Task<ProductDto> Handle(UpdateProductCommand cmd, CancellationToken ct)
     {
-        var product = await repository.GetByIdAsync(ProductId.From(cmd.Id), ct)
+        var id      = ProductId.From(cmd.Id);
+        var product = await repo.GetByIdAsync(id, ct)
             ?? throw new ProductNotFoundException(cmd.Id.ToString());
 
-        if (await repository.ExistsByNameAsync(cmd.Name, ProductId.From(cmd.Id), ct))
-            throw new ProductAlreadyExistsException(cmd.Name);
+        // Name uniqueness — exclude self from check
+        if (product.Name != cmd.Name
+            && await repo.ExistsByNameAsync(cmd.Name, id, ct))
+            throw new ProductNameConflictException(cmd.Name);
 
+        var oldSlug = product.Slug.Value;
         product.UpdateDetails(cmd.Name, cmd.Description, cmd.Brand, cmd.Tags, cmd.Images, cmd.Attributes);
 
-        await repository.UpdateAsync(product, ct);
-        await InvalidateCacheAsync(product, ct);
+        await repo.UpdateAsync(product, ct);
+        await InvalidateCacheAsync(cmd.Id, oldSlug, ct);
 
         return product.ToDto();
     }
 
-    private async Task InvalidateCacheAsync(Product product, CancellationToken ct)
+    private async Task InvalidateCacheAsync(Guid id, string oldSlug, CancellationToken ct)
     {
-        await cache.RemoveAsync(CacheKeys.Product(product.Id.Value.ToString()), ct);
-        await cache.RemoveAsync(CacheKeys.ProductBySlug(product.Slug), ct);
-        await cache.RemoveByPatternAsync(CacheKeys.ProductPattern, ct);
+        await Task.WhenAll(
+            cache.RemoveAsync(CacheKey.ById(id), ct),
+            cache.RemoveAsync(CacheKey.BySlug(oldSlug), ct),
+            cache.RemoveByPrefixAsync(CacheKey.ProductPrefix, ct));
     }
 }
 
-public sealed class UpdateProductPriceHandler(
-    IProductRepository repository,
+// ── UpdatePrice ───────────────────────────────────────────────────────────────
+
+public sealed class UpdatePriceHandler(
+    IProductRepository repo,
     ICacheService cache)
-    : IRequestHandler<UpdateProductPriceCommand, ProductDto>
+    : IRequestHandler<UpdatePriceCommand, ProductDto>
 {
-    public async Task<ProductDto> Handle(UpdateProductPriceCommand cmd, CancellationToken ct)
+    public async Task<ProductDto> Handle(UpdatePriceCommand cmd, CancellationToken ct)
     {
-        var product = await repository.GetByIdAsync(ProductId.From(cmd.Id), ct)
+        var product = await repo.GetByIdAsync(ProductId.From(cmd.Id), ct)
             ?? throw new ProductNotFoundException(cmd.Id.ToString());
 
         var salePrice = cmd.SalePrice.HasValue
-            ? Money.Of(cmd.SalePrice.Value, cmd.Currency)
-            : null;
+            ? Money.Of(cmd.SalePrice.Value, cmd.Currency) : null;
 
         product.UpdatePrice(Money.Of(cmd.Price, cmd.Currency), salePrice);
 
-        await repository.UpdateAsync(product, ct);
-        await cache.RemoveAsync(CacheKeys.Product(product.Id.Value.ToString()), ct);
+        await repo.UpdateAsync(product, ct);
+        await cache.RemoveAsync(CacheKey.ById(cmd.Id), ct);
 
         return product.ToDto();
     }
 }
 
-public sealed class AdjustStockHandler(IProductRepository repository, ICacheService cache)
+// ── AdjustStock ───────────────────────────────────────────────────────────────
+
+public sealed class AdjustStockHandler(
+    IProductRepository repo,
+    ICacheService cache)
     : IRequestHandler<AdjustStockCommand, ProductDto>
 {
     public async Task<ProductDto> Handle(AdjustStockCommand cmd, CancellationToken ct)
     {
-        var product = await repository.GetByIdAsync(ProductId.From(cmd.Id), ct)
+        var product = await repo.GetByIdAsync(ProductId.From(cmd.Id), ct)
             ?? throw new ProductNotFoundException(cmd.Id.ToString());
 
         product.AdjustStock(cmd.Delta, cmd.Reason);
 
-        await repository.UpdateAsync(product, ct);
-        await cache.RemoveAsync(CacheKeys.Product(product.Id.Value.ToString()), ct);
+        await repo.UpdateAsync(product, ct);
+        await cache.RemoveAsync(CacheKey.ById(cmd.Id), ct);
 
         return product.ToDto();
     }
 }
 
-public sealed class ReserveStockHandler(IProductRepository repository, ICacheService cache)
+// ── ReserveStock ──────────────────────────────────────────────────────────────
+
+public sealed class ReserveStockHandler(
+    IProductRepository repo,
+    ICacheService cache)
     : IRequestHandler<ReserveStockCommand, ProductDto>
 {
     public async Task<ProductDto> Handle(ReserveStockCommand cmd, CancellationToken ct)
     {
-        var product = await repository.GetByIdAsync(ProductId.From(cmd.Id), ct)
+        var product = await repo.GetByIdAsync(ProductId.From(cmd.Id), ct)
             ?? throw new ProductNotFoundException(cmd.Id.ToString());
 
         product.ReserveStock(cmd.Quantity);
 
-        await repository.UpdateAsync(product, ct);
-        await cache.RemoveAsync(CacheKeys.Product(product.Id.Value.ToString()), ct);
+        await repo.UpdateAsync(product, ct);
+        await cache.RemoveAsync(CacheKey.ById(cmd.Id), ct);
 
         return product.ToDto();
     }
 }
 
-public sealed class ReleaseStockHandler(IProductRepository repository, ICacheService cache)
+// ── ReleaseStock ──────────────────────────────────────────────────────────────
+
+public sealed class ReleaseStockHandler(
+    IProductRepository repo,
+    ICacheService cache)
     : IRequestHandler<ReleaseStockCommand, ProductDto>
 {
     public async Task<ProductDto> Handle(ReleaseStockCommand cmd, CancellationToken ct)
     {
-        var product = await repository.GetByIdAsync(ProductId.From(cmd.Id), ct)
+        var product = await repo.GetByIdAsync(ProductId.From(cmd.Id), ct)
             ?? throw new ProductNotFoundException(cmd.Id.ToString());
 
         product.ReleaseStock(cmd.Quantity);
 
-        await repository.UpdateAsync(product, ct);
-        await cache.RemoveAsync(CacheKeys.Product(product.Id.Value.ToString()), ct);
+        await repo.UpdateAsync(product, ct);
+        await cache.RemoveAsync(CacheKey.ById(cmd.Id), ct);
 
         return product.ToDto();
     }
 }
 
-public sealed class ActivateProductHandler(IProductRepository repository, ICacheService cache)
-    : IRequestHandler<ActivateProductCommand, ProductDto>
+// ── Status commands ───────────────────────────────────────────────────────────
+
+public sealed class PublishProductHandler(IProductRepository repo, ICacheService cache)
+    : IRequestHandler<PublishProductCommand, ProductDto>
 {
-    public async Task<ProductDto> Handle(ActivateProductCommand cmd, CancellationToken ct)
+    public async Task<ProductDto> Handle(PublishProductCommand cmd, CancellationToken ct)
     {
-        var product = await repository.GetByIdAsync(ProductId.From(cmd.Id), ct)
+        var product = await repo.GetByIdAsync(ProductId.From(cmd.Id), ct)
             ?? throw new ProductNotFoundException(cmd.Id.ToString());
 
-        product.Activate();
-
-        await repository.UpdateAsync(product, ct);
-        await cache.RemoveAsync(CacheKeys.Product(product.Id.Value.ToString()), ct);
-
+        product.Publish();
+        await repo.UpdateAsync(product, ct);
+        await cache.RemoveAsync(CacheKey.ById(cmd.Id), ct);
         return product.ToDto();
     }
 }
 
-public sealed class DeactivateProductHandler(IProductRepository repository, ICacheService cache)
+public sealed class DeactivateProductHandler(IProductRepository repo, ICacheService cache)
     : IRequestHandler<DeactivateProductCommand, ProductDto>
 {
     public async Task<ProductDto> Handle(DeactivateProductCommand cmd, CancellationToken ct)
     {
-        var product = await repository.GetByIdAsync(ProductId.From(cmd.Id), ct)
+        var product = await repo.GetByIdAsync(ProductId.From(cmd.Id), ct)
             ?? throw new ProductNotFoundException(cmd.Id.ToString());
 
         product.Deactivate();
-
-        await repository.UpdateAsync(product, ct);
-        await cache.RemoveAsync(CacheKeys.Product(product.Id.Value.ToString()), ct);
-
+        await repo.UpdateAsync(product, ct);
+        await cache.RemoveAsync(CacheKey.ById(cmd.Id), ct);
         return product.ToDto();
     }
 }
 
-public sealed class ArchiveProductHandler(IProductRepository repository, ICacheService cache)
+public sealed class ArchiveProductHandler(IProductRepository repo, ICacheService cache)
     : IRequestHandler<ArchiveProductCommand, ProductDto>
 {
     public async Task<ProductDto> Handle(ArchiveProductCommand cmd, CancellationToken ct)
     {
-        var product = await repository.GetByIdAsync(ProductId.From(cmd.Id), ct)
+        var product = await repo.GetByIdAsync(ProductId.From(cmd.Id), ct)
             ?? throw new ProductNotFoundException(cmd.Id.ToString());
 
         product.Archive();
-
-        await repository.UpdateAsync(product, ct);
-        await cache.RemoveAsync(CacheKeys.Product(product.Id.Value.ToString()), ct);
-
+        await repo.UpdateAsync(product, ct);
+        await Task.WhenAll(
+            cache.RemoveAsync(CacheKey.ById(cmd.Id), ct),
+            cache.RemoveAsync(CacheKey.BySlug(product.Slug.Value), ct));
         return product.ToDto();
     }
 }
 
-public sealed class DeleteProductHandler(IProductRepository repository, ICacheService cache)
+// ── DeleteProduct ─────────────────────────────────────────────────────────────
+
+public sealed class DeleteProductHandler(IProductRepository repo, ICacheService cache)
     : IRequestHandler<DeleteProductCommand, bool>
 {
     public async Task<bool> Handle(DeleteProductCommand cmd, CancellationToken ct)
     {
-        var product = await repository.GetByIdAsync(ProductId.From(cmd.Id), ct)
+        var id      = ProductId.From(cmd.Id);
+        var product = await repo.GetByIdAsync(id, ct)
             ?? throw new ProductNotFoundException(cmd.Id.ToString());
 
-        await repository.DeleteAsync(product.Id, ct);
-        await cache.RemoveAsync(CacheKeys.Product(product.Id.Value.ToString()), ct);
-        await cache.RemoveAsync(CacheKeys.ProductBySlug(product.Slug), ct);
-        await cache.RemoveByPatternAsync(CacheKeys.ProductPattern, ct);
+        await repo.DeleteAsync(id, ct);
+        await Task.WhenAll(
+            cache.RemoveAsync(CacheKey.ById(cmd.Id), ct),
+            cache.RemoveAsync(CacheKey.BySlug(product.Slug.Value), ct),
+            cache.RemoveByPrefixAsync(CacheKey.ProductPrefix, ct));
 
         return true;
     }

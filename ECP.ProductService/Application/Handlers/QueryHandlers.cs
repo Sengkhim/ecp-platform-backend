@@ -5,103 +5,89 @@ using ECP.ProductService.Application.DTOs;
 using ECP.ProductService.Application.Mappings;
 using ECP.ProductService.Application.Queries;
 using ECP.ProductService.Core.Domain.ValueObjects;
+using ECP.ProductService.Core.Exceptions;
 using ECP.ProductService.Core.Interfaces.Cache;
 using ECP.ProductService.Core.Interfaces.Repositories;
 using MediatR;
 
 namespace ECP.ProductService.Application.Handlers;
 
-public sealed class GetProductByIdHandler(IProductRepository repository, ICacheService cache)
+public sealed class GetProductByIdHandler(
+    IProductRepository repo,
+    ICacheService cache)
     : IRequestHandler<GetProductByIdQuery, ProductDto?>
 {
-    public async Task<ProductDto?> Handle(GetProductByIdQuery query, CancellationToken ct)
-    {
-        var cacheKey = CacheKeys.Product(query.Id.ToString());
-
-        return await cache.GetOrSetAsync(
-            cacheKey,
-            async () =>
+    public Task<ProductDto?> Handle(GetProductByIdQuery q, CancellationToken ct)
+        => cache.GetOrSetAsync<ProductDto>(
+            CacheKey.ById(q.Id),
+            async _ =>
             {
-                var product = await repository.GetByIdAsync(ProductId.From(query.Id), ct);
-                return product?.ToDto()!;
+                var p = await repo.GetByIdAsync(ProductId.From(q.Id), ct);
+                return p?.ToDto()!;
             },
-            expiry: TimeSpan.FromMinutes(10),
-            ct: ct);
-    }
+            ttl: TimeSpan.FromMinutes(10), ct: ct)!;
 }
 
-public sealed class GetProductBySlugHandler(IProductRepository repository, ICacheService cache)
+public sealed class GetProductBySlugHandler(
+    IProductRepository repo,
+    ICacheService cache)
     : IRequestHandler<GetProductBySlugQuery, ProductDto?>
 {
-    public async Task<ProductDto?> Handle(GetProductBySlugQuery query, CancellationToken ct)
-    {
-        var cacheKey = CacheKeys.ProductBySlug(query.Slug);
-
-        return await cache.GetOrSetAsync(
-            cacheKey,
-            async () =>
+    public Task<ProductDto?> Handle(GetProductBySlugQuery q, CancellationToken ct)
+        => cache.GetOrSetAsync<ProductDto>(
+            CacheKey.BySlug(q.Slug),
+            async _ =>
             {
-                var product = await repository.GetBySlugAsync(query.Slug, ct);
-                return product?.ToDto()!;
+                var p = await repo.GetBySlugAsync(Slug.Parse(q.Slug), ct);
+                return p?.ToDto()!;
             },
-            expiry: TimeSpan.FromMinutes(10),
-            ct: ct);
-    }
+            ttl: TimeSpan.FromMinutes(10), ct: ct)!;
 }
 
-public sealed class GetProductsByCategoryHandler(IProductRepository repository, ICacheService cache)
+public sealed class GetProductsByCategoryHandler(
+    IProductRepository repo,
+    ICacheService cache)
     : IRequestHandler<GetProductsByCategoryQuery, PagedResult<ProductSummaryDto>>
 {
-    public async Task<PagedResult<ProductSummaryDto>> Handle(GetProductsByCategoryQuery query, CancellationToken ct)
-    {
-        var cacheKey = CacheKeys.ProductCategory(query.CategoryId.ToString(), query.Skip, query.Take);
-
-        return await cache.GetOrSetAsync(
-            cacheKey,
-            async () =>
+    public Task<PagedResult<ProductSummaryDto>> Handle(GetProductsByCategoryQuery q, CancellationToken ct)
+        => cache.GetOrSetAsync(
+            CacheKey.ByCategory(q.CategoryId, q.Skip, q.Take),
+            async _ =>
             {
-                var products = await repository.GetByCategoryAsync(
-                    CategoryId.From(query.CategoryId), query.Skip, query.Take, ct);
+                var products = await repo.GetByCategoryAsync(
+                    CategoryId.From(q.CategoryId), q.Skip, q.Take, ct);
 
                 var items = products.Select(p => p.ToSummaryDto()).ToList();
-                return new PagedResult<ProductSummaryDto>(items, items.Count, query.Skip, query.Take);
+                return new PagedResult<ProductSummaryDto>(items, items.Count, q.Skip, q.Take);
             },
-            expiry: TimeSpan.FromMinutes(5),
-            ct: ct);
-    }
+            ttl: TimeSpan.FromMinutes(5), ct: ct);
 }
 
-public sealed class SearchProductsHandler(IProductRepository repository, ICacheService cache)
+public sealed class SearchProductsHandler(
+    IProductRepository repo,
+    ICacheService cache)
     : IRequestHandler<SearchProductsQuery, PagedResult<ProductSummaryDto>>
 {
-    public async Task<PagedResult<ProductSummaryDto>> Handle(SearchProductsQuery query, CancellationToken ct)
+    public Task<PagedResult<ProductSummaryDto>> Handle(SearchProductsQuery q, CancellationToken ct)
     {
-        var cacheKey = CacheKeys.ProductSearch(HashQuery(query));
+        var cacheKey = CacheKey.Search(StableHash(q));
 
-        return await cache.GetOrSetAsync(
+        return cache.GetOrSetAsync(
             cacheKey,
-            async () =>
+            async _ =>
             {
-                var (products, total) = await repository.SearchAsync(new ProductSearchQuery(
-                    Keyword:    query.Keyword,
-                    CategoryId: query.CategoryId,
-                    Brand:      query.Brand,
-                    MinPrice:   query.MinPrice,
-                    MaxPrice:   query.MaxPrice,
-                    Status:     query.Status,
-                    SortBy:     query.SortBy,
-                    SortDesc:   query.SortDesc,
-                    Skip:       query.Skip,
-                    Take:       query.Take), ct);
+                var (products, total) = await repo.SearchAsync(new ProductSearchCriteria(
+                    q.Keyword, q.CategoryId, q.Brand,
+                    q.MinPrice, q.MaxPrice, q.Status,
+                    q.SortBy, q.SortDesc, q.Skip, q.Take), ct);
 
                 var items = products.Select(p => p.ToSummaryDto()).ToList();
-                return new PagedResult<ProductSummaryDto>(items, total, query.Skip, query.Take);
+                return new PagedResult<ProductSummaryDto>(items, total, q.Skip, q.Take);
             },
-            expiry: TimeSpan.FromMinutes(2),
-            ct: ct);
+            ttl: TimeSpan.FromMinutes(2), ct: ct);
     }
 
-    private static string HashQuery(SearchProductsQuery q)
+    private static string StableHash(SearchProductsQuery q)
     {
         var json  = JsonSerializer.Serialize(q);
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(json));
@@ -109,13 +95,13 @@ public sealed class SearchProductsHandler(IProductRepository repository, ICacheS
     }
 }
 
-public sealed class GetProductsByIdsHandler(IProductRepository repository)
+public sealed class GetProductsByIdsHandler(IProductRepository repo)
     : IRequestHandler<GetProductsByIdsQuery, IReadOnlyList<ProductDto>>
 {
-    public async Task<IReadOnlyList<ProductDto>> Handle(GetProductsByIdsQuery query, CancellationToken ct)
+    public async Task<IReadOnlyList<ProductDto>> Handle(GetProductsByIdsQuery q, CancellationToken ct)
     {
-        var ids      = query.Ids.Select(ProductId.From).ToList();
-        var products = await repository.GetByIdsAsync(ids, ct);
+        var ids      = q.Ids.Select(ProductId.From).ToList();
+        var products = await repo.GetByIdsAsync(ids, ct);
         return products.Select(p => p.ToDto()).ToList();
     }
 }

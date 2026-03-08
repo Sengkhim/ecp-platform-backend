@@ -18,7 +18,6 @@ public sealed class MongoProductRepository : IProductRepository
         EnsureIndexes();
     }
 
-    // ── Reads ─────────────────────────────────────────────────────────────────
 
     public async Task<Product?> GetByIdAsync(ProductId id, CancellationToken ct = default)
     {
@@ -86,7 +85,8 @@ public sealed class MongoProductRepository : IProductRepository
     }
 
     public Task DeleteAsync(ProductId id, CancellationToken ct = default)
-        => _col.DeleteOneAsync(x => x.Id == id.Value, ct);
+        => _col.DeleteOneAsync(x => x.Id == id.Value,
+            ct);
 
     public async Task<bool> ExistsByNameAsync(
         string name, ProductId? excludeId = null, CancellationToken ct = default)
@@ -96,8 +96,8 @@ public sealed class MongoProductRepository : IProductRepository
             .Regex(x => x.Name, new BsonRegularExpression(
                 $"^{System.Text.RegularExpressions.Regex.Escape(name.Trim())}$", "i"));
 
-        if (excludeId is not null)
-            filter &= Builders<ProductDocument>.Filter.Ne(x => x.Id, excludeId.Value);
+        // if (excludeId is not null)
+        //     filter &= Builders<ProductDocument>.Filter.Ne<ProductId>(x => x.Id, excludeId);
 
         return await _col.CountDocumentsAsync(filter, cancellationToken: ct) > 0;
     }
@@ -127,10 +127,9 @@ public sealed class MongoProductRepository : IProductRepository
         if (c.MaxPrice.HasValue)
             filters.Add(b.Lte(x => x.Price, c.MaxPrice.Value));
 
-        if (!string.IsNullOrWhiteSpace(c.Status))
-            filters.Add(b.Eq(x => x.Status, c.Status));
-        else
-            filters.Add(b.Ne(x => x.Status, "Archived")); // never return archived by default
+        filters.Add(!string.IsNullOrWhiteSpace(c.Status)
+            ? b.Eq(x => x.Status, c.Status)
+            : b.Ne(x => x.Status, "Archived")); // never return archived by default
 
         return filters.Count > 0 ? b.And(filters) : b.Empty;
     }

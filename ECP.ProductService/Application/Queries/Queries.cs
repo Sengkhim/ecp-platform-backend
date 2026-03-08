@@ -3,15 +3,16 @@ using MediatR;
 
 namespace ECP.ProductService.Application.Queries;
 
-public record GetProductByIdQuery(Guid Id)       : IRequest<ProductDto?>;
-public record GetProductBySlugQuery(string Slug) : IRequest<ProductDto?>;
+public sealed record GetProductByIdQuery(Guid Id)       : IRequest<ProductDto?>;
+public sealed record GetProductBySlugQuery(string Slug) : IRequest<ProductDto?>;
 
-public record GetProductsByCategoryQuery(
+public sealed record GetProductsByCategoryQuery(
     Guid CategoryId,
     int  Skip = 0,
-    int  Take = 20) : IRequest<PagedResult<ProductSummaryDto>>;
+    int  Take = 20
+) : IRequest<PagedResult<ProductSummaryDto>>;
 
-public record SearchProductsQuery(
+public sealed record SearchProductsQuery(
     string?  Keyword    = null,
     Guid?    CategoryId = null,
     string?  Brand      = null,
@@ -21,6 +22,9 @@ public record SearchProductsQuery(
     string   SortBy     = "createdAt",
     bool     SortDesc   = true,
     int      Skip       = 0,
-    int      Take       = 20) : IRequest<PagedResult<ProductSummaryDto>>;
+    int      Take       = 20
+) : IRequest<PagedResult<ProductSummaryDto>>;
 
-public record GetProductsByIdsQuery(IEnumerable<Guid> Ids) : IRequest<IReadOnlyList<ProductDto>>;
+/// <summary>Used by GraphQL DataLoader to batch-load products in one round trip.</summary>
+public sealed record GetProductsByIdsQuery(IReadOnlyList<Guid> Ids)
+    : IRequest<IReadOnlyList<ProductDto>>;

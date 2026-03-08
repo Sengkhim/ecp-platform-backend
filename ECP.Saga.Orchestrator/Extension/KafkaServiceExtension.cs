@@ -95,6 +95,8 @@ public static class KafkaServiceExtension
             ?? configuration["Kafka:BootstrapServers"]
             ?? "kafka.ecp-dev.svc.cluster.local:9092");
 
+        // k.Host("kafka.ecp-dev.svc.cluster.local:9092");
+
         k.TopicEndpoint<OrderCreatedEvent>("order-created", "orchestrator", e =>
         {
             e.AutoStart     = true;
