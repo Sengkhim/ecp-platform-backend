@@ -1,0 +1,6 @@
+@ECP.ProductService_HostAddress = http://localhost:5223
+
+GET {{ECP.ProductService_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

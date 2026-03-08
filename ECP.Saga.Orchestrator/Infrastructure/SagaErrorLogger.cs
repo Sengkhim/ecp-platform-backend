@@ -162,16 +162,16 @@ public sealed class SagaErrorDocument
     public string Id { get; set; } = ObjectId.GenerateNewId().ToString();
 
     [BsonRepresentation(BsonType.String)]
-    public Guid CorrelationId { get; set; }
+    public Guid CorrelationId { get; init; }
 
     [BsonRepresentation(BsonType.String)]
-    public Guid OrderId { get; set; }
+    public Guid OrderId { get; init; }
 
     public string        CurrentState    { get; set; } = string.Empty;
-    public string        ErrorStep       { get; set; } = string.Empty;
+    public string        ErrorStep       { get; init; } = string.Empty;
     public string        ErrorMessage    { get; set; } = string.Empty;
-    public SagaErrorKind ErrorKind       { get; set; }
+    public SagaErrorKind ErrorKind       { get; init; }
     public string?       ExceptionType   { get; set; }
     public string?       ExceptionDetail { get; set; }
-    public DateTime      OccurredAt      { get; set; }
+    public DateTime      OccurredAt      { get; init; }
 }
