@@ -4,7 +4,7 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ─────────────────────────────────────────────────────────────────────────────
-# FRAGMENTS  (reusable field sets)
+# FRAGMENTS
 # ─────────────────────────────────────────────────────────────────────────────
 
 fragment ProductSpecFields on ProductSpec {
@@ -29,9 +29,7 @@ fragment ProductFullFields on Product {
   status
   tags
   images
-  attributes {
-    ...ProductSpecFields
-  }
+  attributes { ...ProductSpecFields }
   version
   createdAt
   updatedAt
@@ -65,50 +63,44 @@ fragment PageInfoFields on PagedProductSummaryResult {
 
 # ── Get product by ID ─────────────────────────────────────────────────────────
 query GetProduct($id: UUID!) {
-  getProduct(id: $id) {
+  product(id: $id) {
     ...ProductFullFields
   }
 }
-
-# Variables:
-# {
-#   "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
-# }
+# { "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6" }
 
 
 # ── Get product by slug ───────────────────────────────────────────────────────
 query GetProductBySlug($slug: String!) {
-  getProductBySlug(slug: $slug) {
+  productBySlug(slug: $slug) {
     ...ProductFullFields
   }
 }
-
-# Variables:
-# {
-#   "slug": "apple-iphone-15-pro"
-# }
+# { "slug": "apple-iphone-15-pro" }
 
 
-# ── Get products by category (paginated) ──────────────────────────────────────
-query GetProductsByCategory(
-  $categoryId: UUID!
-  $skip: Int! = 0
-  $take: Int! = 20
-) {
-  getProductsByCategory(categoryId: $categoryId, skip: $skip, take: $take) {
+# ── Get ALL products (paginated) ──────────────────────────────────────────────
+query GetAllProducts($skip: Int = 0, $take: Int = 20) {
+  products(skip: $skip, take: $take) {
     ...PageInfoFields
     items {
       ...ProductSummaryFields
     }
   }
 }
+# { "skip": 0, "take": 20 }
 
-# Variables:
-# {
-#   "categoryId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-#   "skip": 0,
-#   "take": 20
-# }
+
+# ── Get products by category ──────────────────────────────────────────────────
+query GetProductsByCategory($categoryId: UUID!, $skip: Int = 0, $take: Int = 20) {
+  productsByCategory(categoryId: $categoryId, skip: $skip, take: $take) {
+    ...PageInfoFields
+    items {
+      ...ProductSummaryFields
+    }
+  }
+}
+# { "categoryId": "3fa85f64-5717-4562-b3fc-2c963f66afa6", "skip": 0, "take": 20 }
 
 
 # ── Search products ───────────────────────────────────────────────────────────
@@ -120,70 +112,25 @@ query SearchProducts($input: SearchProductsInput!) {
     }
   }
 }
-
-# Variables — full search:
-# {
-#   "input": {
-#     "keyword": "iphone",
-#     "categoryId": null,
-#     "brand": "Apple",
-#     "minPrice": 500,
-#     "maxPrice": 2000,
-#     "status": "Active",
-#     "sortBy": "price",
-#     "sortDesc": false,
-#     "skip": 0,
-#     "take": 20
-#   }
-# }
-
-# Variables — keyword only:
-# {
-#   "input": {
-#     "keyword": "laptop",
-#     "skip": 0,
-#     "take": 10
-#   }
-# }
-
-# Variables — by brand:
-# {
-#   "input": {
-#     "brand": "Samsung",
-#     "sortBy": "price",
-#     "sortDesc": true,
-#     "skip": 0,
-#     "take": 20
-#   }
-# }
-
-# Variables — price range:
-# {
-#   "input": {
-#     "minPrice": 100,
-#     "maxPrice": 500,
-#     "sortBy": "price",
-#     "sortDesc": false,
-#     "skip": 0,
-#     "take": 20
-#   }
-# }
+# Full:
+# { "input": { "keyword": "iphone", "brand": "Apple", "minPrice": 500,
+#              "maxPrice": 2000, "status": "Active", "sortBy": "price",
+#              "sortDesc": false, "skip": 0, "take": 20 } }
+# Keyword only:
+# { "input": { "keyword": "laptop" } }
+# Price range:
+# { "input": { "minPrice": 100, "maxPrice": 500, "sortBy": "price", "sortDesc": false } }
+# Active only:
+# { "input": { "status": "Active", "sortBy": "createdAt", "sortDesc": true } }
 
 
-# ── Batch get products by IDs ─────────────────────────────────────────────────
+# ── Batch get by IDs ──────────────────────────────────────────────────────────
 query GetProductsByIds($ids: [UUID!]!) {
-  getProductsByIds(ids: $ids) {
+  productsByIds(ids: $ids) {
     ...ProductFullFields
   }
 }
-
-# Variables:
-# {
-#   "ids": [
-#     "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-#     "4fa85f64-5717-4562-b3fc-2c963f66afa7"
-#   ]
-# }
+# { "ids": ["3fa85f64-5717-4562-b3fc-2c963f66afa6", "4fa85f64-5717-4562-b3fc-2c963f66afa7"] }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -196,68 +143,32 @@ mutation CreateProduct($input: CreateProductInput!) {
     ...ProductFullFields
   }
 }
-
-# Variables — minimal:
-# {
-#   "input": {
-#     "name": "iPhone 15 Pro",
-#     "description": "Apple iPhone 15 Pro 256GB",
-#     "price": 999.99,
-#     "currency": "USD",
-#     "categoryId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-#     "brand": "Apple",
-#     "initialStock": 100
-#   }
-# }
-
-# Variables — full:
-# {
-#   "input": {
-#     "name": "iPhone 15 Pro",
-#     "description": "Apple iPhone 15 Pro 256GB Natural Titanium",
-#     "price": 999.99,
-#     "currency": "USD",
-#     "categoryId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-#     "brand": "Apple",
-#     "initialStock": 100,
-#     "tags": ["smartphone", "apple", "5g"],
-#     "images": [
-#       "https://cdn.example.com/iphone15pro-front.jpg",
-#       "https://cdn.example.com/iphone15pro-back.jpg"
-#     ],
-#     "attributes": [
-#       { "key": "storage", "value": "256GB" },
-#       { "key": "color",   "value": "Natural Titanium" },
-#       { "key": "display", "value": "6.1 inch Super Retina XDR" }
-#     ]
-#   }
-# }
+# Minimal:
+# { "input": { "name": "iPhone 15 Pro", "description": "Apple iPhone 15 Pro 256GB",
+#              "price": 999.99, "currency": "USD",
+#              "categoryId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+#              "brand": "Apple", "initialStock": 100 } }
+# Full:
+# { "input": { "name": "iPhone 15 Pro", "description": "Apple iPhone 15 Pro 256GB",
+#              "price": 999.99, "currency": "USD",
+#              "categoryId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+#              "brand": "Apple", "initialStock": 100,
+#              "tags": ["smartphone", "apple", "5g"],
+#              "images": ["https://cdn.example.com/img1.jpg"],
+#              "attributes": [{ "key": "storage", "value": "256GB" },
+#                             { "key": "color",   "value": "Natural Titanium" }] } }
 
 
-# ── Update product details ────────────────────────────────────────────────────
+# ── Update product ────────────────────────────────────────────────────────────
 mutation UpdateProduct($input: UpdateProductInput!) {
   updateProduct(input: $input) {
     ...ProductFullFields
   }
 }
-
-# Variables:
-# {
-#   "input": {
-#     "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-#     "name": "iPhone 15 Pro Max",
-#     "description": "Apple iPhone 15 Pro Max 512GB",
-#     "brand": "Apple",
-#     "tags": ["smartphone", "apple", "5g", "pro-max"],
-#     "images": [
-#       "https://cdn.example.com/iphone15promax-front.jpg"
-#     ],
-#     "attributes": [
-#       { "key": "storage", "value": "512GB" },
-#       { "key": "color",   "value": "Black Titanium" }
-#     ]
-#   }
-# }
+# { "input": { "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+#              "name": "iPhone 15 Pro Max", "description": "Updated desc",
+#              "brand": "Apple", "tags": ["smartphone", "pro-max"],
+#              "attributes": [{ "key": "storage", "value": "512GB" }] } }
 
 
 # ── Update price ──────────────────────────────────────────────────────────────
@@ -271,25 +182,8 @@ mutation UpdatePrice($input: UpdatePriceInput!) {
     updatedAt
   }
 }
-
-# Variables — regular price only:
-# {
-#   "input": {
-#     "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-#     "price": 899.99,
-#     "currency": "USD"
-#   }
-# }
-
-# Variables — with sale price:
-# {
-#   "input": {
-#     "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-#     "price": 999.99,
-#     "currency": "USD",
-#     "salePrice": 799.99
-#   }
-# }
+# Regular:   { "input": { "id": "...", "price": 899.99, "currency": "USD" } }
+# With sale: { "input": { "id": "...", "price": 999.99, "currency": "USD", "salePrice": 799.99 } }
 
 
 # ── Adjust stock ──────────────────────────────────────────────────────────────
@@ -305,122 +199,52 @@ mutation AdjustStock($input: AdjustStockInput!) {
     updatedAt
   }
 }
-
-# Variables — restock:
-# {
-#   "input": {
-#     "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-#     "delta": 50,
-#     "reason": "Purchase order PO-2024-001 received"
-#   }
-# }
-
-# Variables — consume / manual deduction:
-# {
-#   "input": {
-#     "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-#     "delta": -5,
-#     "reason": "Damaged goods written off"
-#   }
-# }
+# Restock:  { "input": { "id": "...", "delta": 50,  "reason": "PO-2024-001 received" } }
+# Write-off:{ "input": { "id": "...", "delta": -5,  "reason": "Damaged goods" } }
 
 
 # ── Reserve stock ─────────────────────────────────────────────────────────────
 mutation ReserveStock($input: ReserveStockInput!) {
   reserveStock(input: $input) {
     id
-    name
     stockQuantity
     stockReserved
     stockAvailable
     updatedAt
   }
 }
-
-# Variables:
-# {
-#   "input": {
-#     "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-#     "quantity": 2
-#   }
-# }
+# { "input": { "id": "...", "quantity": 2 } }
 
 
 # ── Release stock ─────────────────────────────────────────────────────────────
 mutation ReleaseStock($input: ReleaseStockInput!) {
   releaseStock(input: $input) {
     id
-    name
     stockQuantity
     stockReserved
     stockAvailable
     updatedAt
   }
 }
-
-# Variables:
-# {
-#   "input": {
-#     "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-#     "quantity": 2
-#   }
-# }
+# { "input": { "id": "...", "quantity": 2 } }
 
 
-# ── Publish product ───────────────────────────────────────────────────────────
+# ── Status transitions ────────────────────────────────────────────────────────
 mutation PublishProduct($id: UUID!) {
-  publishProduct(id: $id) {
-    id
-    name
-    status
-    updatedAt
-  }
+  publishProduct(id: $id) { id name status updatedAt }
 }
 
-# Variables:
-# {
-#   "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
-# }
-
-
-# ── Deactivate product ────────────────────────────────────────────────────────
 mutation DeactivateProduct($id: UUID!) {
-  deactivateProduct(id: $id) {
-    id
-    name
-    status
-    updatedAt
-  }
+  deactivateProduct(id: $id) { id name status updatedAt }
 }
 
-# Variables:
-# {
-#   "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
-# }
-
-
-# ── Archive product ───────────────────────────────────────────────────────────
 mutation ArchiveProduct($id: UUID!) {
-  archiveProduct(id: $id) {
-    id
-    name
-    status
-    updatedAt
-  }
+  archiveProduct(id: $id) { id name status updatedAt }
 }
-
-# Variables:
-# {
-#   "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
-# }
 
 
 # ── Delete product ────────────────────────────────────────────────────────────
 mutation DeleteProduct($id: UUID!) {
   deleteProduct(id: $id)
 }
-
-# Variables:
-# {
-#   "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
-# }
+# { "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6" }

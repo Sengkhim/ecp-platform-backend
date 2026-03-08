@@ -26,5 +26,11 @@ public sealed record SearchProductsQuery(
 ) : IRequest<PagedResult<ProductSummaryDto>>;
 
 /// <summary>Used by GraphQL DataLoader to batch-load products in one round trip.</summary>
+public sealed record GetAllProductsQuery(
+    int  Skip = 0,
+    int  Take = 20
+) : IRequest<PagedResult<ProductSummaryDto>>;
+
+/// <summary>Used by GraphQL DataLoader to batch-load products in one round trip.</summary>
 public sealed record GetProductsByIdsQuery(IReadOnlyList<Guid> Ids)
     : IRequest<IReadOnlyList<ProductDto>>;

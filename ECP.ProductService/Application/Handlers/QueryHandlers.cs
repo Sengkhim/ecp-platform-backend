@@ -5,7 +5,6 @@ using ECP.ProductService.Application.DTOs;
 using ECP.ProductService.Application.Mappings;
 using ECP.ProductService.Application.Queries;
 using ECP.ProductService.Core.Domain.ValueObjects;
-using ECP.ProductService.Core.Exceptions;
 using ECP.ProductService.Core.Interfaces.Cache;
 using ECP.ProductService.Core.Interfaces.Repositories;
 using MediatR;
@@ -18,12 +17,12 @@ public sealed class GetProductByIdHandler(
     : IRequestHandler<GetProductByIdQuery, ProductDto?>
 {
     public Task<ProductDto?> Handle(GetProductByIdQuery q, CancellationToken ct)
-        => cache.GetOrSetAsync<ProductDto>(
+        => cache.GetOrSetAsync<ProductDto?>(
             CacheKey.ById(q.Id),
             async _ =>
             {
                 var p = await repo.GetByIdAsync(ProductId.From(q.Id), ct);
-                return p?.ToDto()!;
+                return p?.ToDto();
             },
             ttl: TimeSpan.FromMinutes(10), ct: ct)!;
 }
@@ -34,12 +33,12 @@ public sealed class GetProductBySlugHandler(
     : IRequestHandler<GetProductBySlugQuery, ProductDto?>
 {
     public Task<ProductDto?> Handle(GetProductBySlugQuery q, CancellationToken ct)
-        => cache.GetOrSetAsync<ProductDto>(
+        => cache.GetOrSetAsync<ProductDto?>(
             CacheKey.BySlug(q.Slug),
             async _ =>
             {
                 var p = await repo.GetBySlugAsync(Slug.Parse(q.Slug), ct);
-                return p?.ToDto()!;
+                return p?.ToDto();
             },
             ttl: TimeSpan.FromMinutes(10), ct: ct)!;
 }
@@ -104,4 +103,23 @@ public sealed class GetProductsByIdsHandler(IProductRepository repo)
         var products = await repo.GetByIdsAsync(ids, ct);
         return products.Select(p => p.ToDto()).ToList();
     }
+}
+
+public sealed class GetAllProductsHandler(
+    IProductRepository repo,
+    ICacheService cache)
+    : IRequestHandler<GetAllProductsQuery, PagedResult<ProductSummaryDto>>
+{
+    public Task<PagedResult<ProductSummaryDto>> Handle(GetAllProductsQuery q, CancellationToken ct)
+        => cache.GetOrSetAsync(
+            CacheKey.Search($"all:{q.Skip}:{q.Take}"),
+            async _ =>
+            {
+                var (products, total) = await repo.SearchAsync(
+                    new ProductSearchCriteria(Skip: q.Skip, Take: q.Take), ct);
+
+                var items = products.Select(p => p.ToSummaryDto()).ToList();
+                return new PagedResult<ProductSummaryDto>(items, total, q.Skip, q.Take);
+            },
+            ttl: TimeSpan.FromMinutes(2), ct: ct);
 }
