@@ -4,11 +4,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Contracts", "Contracts\Cont
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ECP.Saga.Orchestrator", "ECP.Saga.Orchestrator\ECP.Saga.Orchestrator.csproj", "{E81C5971-DBC2-4E28-9C1B-C7F3C0D5C824}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{57AFA812-8EA6-426A-A442-7A6B2E4D5C25}"
-	ProjectSection(SolutionItems) = preProject
-		compose.yaml = compose.yaml
-	EndProjectSection
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ECP.NotificationService", "ECP.NotificationService\ECP.NotificationService.csproj", "{5A73D32C-3EE7-4902-B973-5C2F0D901E50}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ECP.OrderService", "ECP.OrderService\ECP.OrderService.csproj", "{7C00CD36-558A-4B8F-A806-30DB44028DA1}"

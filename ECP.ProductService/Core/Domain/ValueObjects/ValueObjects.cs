@@ -37,7 +37,7 @@ public sealed class Money : IEquatable<Money>
 
     private Money() { Amount = 0; Currency = "USD"; }
 
-    public Money(decimal amount, string currency)
+    private Money(decimal amount, string currency)
     {
         if (amount < 0)
             throw new ArgumentException("Amount cannot be negative.", nameof(amount));
@@ -63,8 +63,9 @@ public sealed class Money : IEquatable<Money>
     public Money Subtract(Money other)
     {
         EnsureSameCurrency(other);
-        if (Amount < other.Amount) throw new InvalidOperationException("Result would be negative.");
-        return new Money(Amount - other.Amount, Currency);
+        return Amount < other.Amount 
+            ? throw new InvalidOperationException("Result would be negative.") 
+            : new Money(Amount - other.Amount, Currency);
     }
 
     public bool IsLessThan(Money other)    { EnsureSameCurrency(other); return Amount < other.Amount; }
@@ -88,52 +89,63 @@ public sealed class StockInfo
     public int Quantity  { get; }
     public int Reserved  { get; }
     public int Available => Quantity - Reserved;
-    public bool IsLowStock => Available > 0 && Available <= 5;
+    public bool IsLowStock => Available is > 0 and <= 5;
 
     private StockInfo() { }
     private StockInfo(int quantity, int reserved) { Quantity = quantity; Reserved = reserved; }
 
     public static StockInfo Create(int quantity, int reserved = 0)
     {
-        if (quantity < 0)        throw new ArgumentException("Quantity cannot be negative.");
-        if (reserved < 0)        throw new ArgumentException("Reserved cannot be negative.");
-        if (reserved > quantity) throw new ArgumentException("Reserved cannot exceed quantity.");
-        return new(quantity, reserved);
+        if (quantity < 0)       
+            throw new ArgumentException("Quantity cannot be negative.");
+        if (reserved < 0)      
+            throw new ArgumentException("Reserved cannot be negative.");
+        
+        return reserved > quantity
+            ? throw new ArgumentException("Reserved cannot exceed quantity.") 
+            : new StockInfo(quantity, reserved);
     }
 
     public StockInfo WithAdjustedQuantity(int delta)
     {
         var newQty = Quantity + delta;
-        if (newQty < 0) throw new InvalidOperationException($"Stock would go negative. Current: {Quantity}, Delta: {delta}.");
-        return new(newQty, Math.Min(Reserved, newQty));
+        return newQty < 0 
+            ? throw new InvalidOperationException($"Stock would go negative. Current: {Quantity}, Delta: {delta}.") 
+            : new StockInfo(newQty, Math.Min(Reserved, newQty));
     }
 
     public StockInfo WithReserved(int reserved)   => Create(Quantity, reserved);
-    public override string ToString()              => $"Qty:{Quantity} Reserved:{Reserved} Available:{Available}";
+    public override string ToString() => $"Qty:{Quantity} Reserved:{Reserved} Available:{Available}";
 }
 
 /// <summary>Slug value object — immutable, validated, URL-safe.</summary>
-public readonly record struct Slug(string Value)
+public readonly partial record struct Slug(string Value)
 {
     private static readonly System.Text.RegularExpressions.Regex ValidSlugRegex =
-        new(@"^[a-z0-9]+(?:-[a-z0-9]+)*$", System.Text.RegularExpressions.RegexOptions.Compiled);
+        MyRegex();
 
     public static Slug From(string raw)
     {
-        var slug = System.Text.RegularExpressions.Regex
-            .Replace(raw.ToLowerInvariant().Trim(), @"[^a-z0-9]+", "-")
+        var slug = MyRegex1().Replace(raw.ToLowerInvariant().Trim(), "-")
             .Trim('-');
 
-        if (string.IsNullOrEmpty(slug)) throw new ArgumentException("Cannot generate slug from input.");
-        return new(slug);
+        return string.IsNullOrEmpty(slug) 
+            ? throw new ArgumentException("Cannot generate slug from input.")
+            : new Slug(slug);
     }
 
     public static Slug Parse(string value)
     {
-        if (!ValidSlugRegex.IsMatch(value))
-            throw new ArgumentException($"'{value}' is not a valid slug.");
-        return new(value);
+        return !ValidSlugRegex.IsMatch(value) 
+            ? throw new ArgumentException($"'{value}' is not a valid slug.")
+            : new Slug(value);
     }
 
     public override string ToString() => Value;
+    
+    [System.Text.RegularExpressions.GeneratedRegex(@"^[a-z0-9]+(?:-[a-z0-9]+)*$", System.Text.RegularExpressions.RegexOptions.Compiled)]
+    private static partial System.Text.RegularExpressions.Regex MyRegex();
+   
+    [System.Text.RegularExpressions.GeneratedRegex(@"[^a-z0-9]+")]
+    private static partial System.Text.RegularExpressions.Regex MyRegex1();
 }
