@@ -4,35 +4,22 @@ echo "Deleting ecp-dev namespace and all resources"
 echo "=========================================="
 
 # Delete the namespace (this will delete all resources within it)
-# kubectl delete namespace ecp-dev
-
-# Quick fix script - applies the corrected deployment
-
-# Additional wait to ensure cleanup
-#sleep 5
+#kubectl delete namespace ecp-dev
 
 echo ""
 echo "=========================================="
-echo "Loading local Docker image to Minikube"
+echo "Rebuild image for OrbStack Kubernetes"
 echo "=========================================="
 
-echo "Re-Build image and load to minikube"
-
-docker build -t ecp-warehouse:dev -f Dockerfile .
-
-# Load the local image into Minikube
-minikube image load ecp.order_analy_serservice:dev
+# OrbStack shares local Docker images directly — no image load needed!
+docker build -t ecp-order-analyser:dev .
 
 echo ""
-echo "Verifying image is loaded:"
-minikube image ls | grep ecp.order_analy_serservice
+echo "Verifying image is built:"
+docker images | grep ecp-order-analyser
 
 # Apply the updated deployment
 kubectl apply -f deployment.yaml
-
-#echo ""
-#echo "Waiting for rollout to complete..."
-#kubectl rollout status deployment/order-analy-service -n ecp-dev --timeout=120s
 
 echo ""
 echo "=========================================="

@@ -7,10 +7,25 @@ Accept: application/json
 
 
 ### api-gateway.local  127.0.0.1 
-GET http://api-gateway.local/health/live
+GET http://127.0.0.1/health/live
 Accept: application/json
 
-
 ### 127.0.0.1  
-GET http://192.168.49.2/api/analyst/status
+GET http://localhost:5028/api/epc-warehouse
+Accept: application/json
+
+### get 
+GET http://api-gateway.ecp-dev.svc.cluster.local/health/live
+Accept: application/json
+
+### get 
+GET http://api-gateway.ecp-dev.svc.cluster.local/api/ecp-warehouse
+Accept: application/json
+
+### get 
+GET http://api-gateway.ecp-dev.svc.cluster.local/api/order-analyser/health/live
+Accept: application/json
+
+### http://api-gateway.ecp-dev.svc.cluster.local/api/order/
+GET http://api-gateway.ecp-dev.svc.cluster.local/api/order
 Accept: application/json

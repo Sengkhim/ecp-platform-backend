@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace ECP.OrderService.Controllers.Orders;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("")]
 [Produces("application/json")]
 public class OrdersController(Modules.Order.Service.OrderService orderService) : ControllerBase
 {

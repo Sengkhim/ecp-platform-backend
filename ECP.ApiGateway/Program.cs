@@ -51,7 +51,3 @@ finally
 {
     Log.CloseAndFlush();
 }
-
-
-// kubectl delete deployment,svc,ingress -n weather-api --all
-// minikube image load test:latest

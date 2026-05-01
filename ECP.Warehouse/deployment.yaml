@@ -1,5 +1,7 @@
 ---
+# ──────────────────────────────────────────────────────────────────────────────
 # Namespace
+# ──────────────────────────────────────────────────────────────────────────────
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -9,7 +11,9 @@ metadata:
     environment: development
 
 ---
+# ──────────────────────────────────────────────────────────────────────────────
 # Deployment
+# ──────────────────────────────────────────────────────────────────────────────
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,6 +27,11 @@ spec:
   selector:
     matchLabels:
       app: ecp-warehouse
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   template:
     metadata:
       labels:
@@ -32,7 +41,7 @@ spec:
       containers:
         - name: ecp-warehouse
           image: ecp-warehouse:dev
-          imagePullPolicy: Never  # Use local image loaded into Minikube
+          imagePullPolicy: Never
           ports:
             - containerPort: 8080
               name: http
@@ -42,6 +51,9 @@ spec:
               value: "Development"
             - name: ASPNETCORE_URLS
               value: "http://+:8080"
+            # FIX: Disable HTTPS redirect — running plain HTTP inside cluster
+            - name: ASPNETCORE_HTTP_PORTS
+              value: "8080"
           resources:
             requests:
               memory: "256Mi"
@@ -53,7 +65,11 @@ spec:
       restartPolicy: Always
 
 ---
+# ──────────────────────────────────────────────────────────────────────────────
 # Service (ClusterIP)
+# ── Used by api-gateway YARP to forward requests internally
+# ── gateway calls: http://ecp-warehouse (cluster DNS) → this service → pod
+# ──────────────────────────────────────────────────────────────────────────────
 apiVersion: v1
 kind: Service
 metadata:
@@ -73,8 +89,10 @@ spec:
   sessionAffinity: None
 
 ---
-# NodePort Service (Minikube direct access)
-# Access via: http://<minikube-ip>:30080
+# ──────────────────────────────────────────────────────────────────────────────
+# Service (NodePort) — Minikube direct access
+# ── Access via: http://<minikube-ip>:30080
+# ──────────────────────────────────────────────────────────────────────────────
 apiVersion: v1
 kind: Service
 metadata:
@@ -95,7 +113,9 @@ spec:
   sessionAffinity: None
 
 ---
-# LoadBalancer Service
+# ──────────────────────────────────────────────────────────────────────────────
+# Service (LoadBalancer) — MetalLB production
+# ──────────────────────────────────────────────────────────────────────────────
 apiVersion: v1
 kind: Service
 metadata:
@@ -103,11 +123,6 @@ metadata:
   namespace: ecp-dev
   labels:
     app: ecp-warehouse
-  #  annotations:
-  # Add cloud provider specific annotations here if needed
-  # For AWS: service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-  # For Azure: service.beta.kubernetes.io/azure-load-balancer-internal: "false"
-  # For GCP: cloud.google.com/load-balancer-type: "External"
 spec:
   type: LoadBalancer
   selector:
@@ -118,11 +133,21 @@ spec:
       targetPort: 8080
       protocol: TCP
   sessionAffinity: None
-  # Uncomment to specify a static IP (cloud provider specific)
-  # loadBalancerIP: "your-static-ip-here"
 
 ---
+# ──────────────────────────────────────────────────────────────────────────────
 # Ingress
+# ── Exposes warehouse externally at ecp-warehouse.dev
+# ── Also read by api-gateway KubernetesServiceDiscoveryProvider:
+# ──   proxy.gateway/enabled      = true   → gateway picks this up
+# ──   proxy.gateway/route-path   = /api/ecp-warehouse/{**catch-all}
+# ──   proxy.gateway/strip-prefix = true   → strips /api/ecp-warehouse
+# ──   destination                = http://ecp-warehouse (ClusterIP DNS)
+# ──
+# ── FIX: route-path was "/api/epc-warehouse" (typo) → "/api/ecp-warehouse"
+# ── FIX: added proxy.gateway/destination-url pointing to ClusterIP
+# ──      so YARP calls ecp-warehouse directly inside cluster (no DNS loop)
+# ──────────────────────────────────────────────────────────────────────────────
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -131,58 +156,47 @@ metadata:
   labels:
     app: ecp-warehouse
   annotations:
-    # Nginx Ingress Controller annotations
     nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
-    
-    # ── CORS ──────────────────────────────────────────────────────────────
+
+    # ── CORS ──────────────────────────────────────────────────────────────────
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "*"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,Authorization,Content-Type"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,Authorization,Content-Type,X-Correlation-ID"
 
-    # ── Timeouts ───────────────────────────────────────────────────────────
+    # ── Timeouts ──────────────────────────────────────────────────────────────
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
 
-    # ── Max upload size ────────────────────────────────────────────────────
+    # ── Max upload size ───────────────────────────────────────────────────────
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-    
-    # ── API Gateway (YARP) discovery ──────────────────────────────────────
+
+    # ── API Gateway (YARP) discovery ──────────────────────────────────────────
+    # The gateway watches this ingress and builds a YARP route:
+    #   /api/ecp-warehouse/{**catch-all}  →  strip prefix  →  http://ecp-warehouse
     #
-    # proxy.gateway/destination-url is NOT needed here because the ingress
-    # rule already declares:  host: ecp-warehouse.dev
-    # The gateway reads that host and builds:
-    #   destination = http://ecp-warehouse.dev  (from IngressBaseUrl scheme
-    #                                           + ingress rule host)
-    # OR set IngressBaseUrl=http://ecp-warehouse.dev in appsettings.json
-    # and leave destination-url absent — the host header is set automatically.
+    # proxy.gateway/destination-url points to ClusterIP service name (not external host)
+    # This means YARP forwards directly inside the cluster — fast, no external DNS needed
     #
-    # Route mapping:
-    #   /api/analyst/{**catch-all}  →  strip /api/analyst  →  /{catch-all}
-    #   e.g. /api/analyst/weatherforecast → /weatherforecast
-    #   e.g. /api/analyst/health          → /health
+    # Example:
+    #   curl http://api-gateway.dev/api/ecp-warehouse/
+    #     → YARP strips /api/ecp-warehouse
+    #     → forwards to http://ecp-warehouse/
+    #     → ClusterIP routes to ecp-warehouse pod :8080
+    #     → returns WeatherForecast ✅
     proxy.gateway/enabled: "true"
-    proxy.gateway/route-path: "/api/analyst/{**catch-all}"
+    proxy.gateway/route-path: "/api/ecp-warehouse/{**catch-all}"  # ✅ ecp
     proxy.gateway/strip-prefix: "true"
+    proxy.gateway/destination-url: "http://ecp-warehouse.ecp-dev.svc.cluster.local"
     proxy.gateway/health-path: "/health/live"
-    
-    # Uncomment for SSL/TLS
-    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    
-    # Additional annotations based on your ingress controller
-    # For AWS ALB Ingress Controller:
-    # alb.ingress.kubernetes.io/scheme: internet-facing
-    # alb.ingress.kubernetes.io/target-type: ip
-    
-    # For rate limiting:
-    # nginx.ingress.kubernetes.io/limit-rps: "100"
+
 spec:
-  ingressClassName: nginx  # Change based on your ingress controller (nginx, alb, traefik, etc.)
+  ingressClassName: nginx
   rules:
-    - host: ecp-warehouse.dev  # ⚠️ Add to /etc/hosts: <minikube-ip> ecp-warehouse.dev
+    # ⚠️ Add to /etc/hosts: 192.168.49.2 ecp-warehouse.dev
+    - host: ecp-warehouse.dev
       http:
         paths:
           - path: /
@@ -192,9 +206,3 @@ spec:
                 name: ecp-warehouse
                 port:
                   number: 80
-  
-  # Uncomment for TLS/SSL configuration
-  # tls:
-  # - hosts:
-  #   - ecp-warehouse.dev
-  #   secretName: ecp-warehouse-tls

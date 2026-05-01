@@ -1,0 +1,213 @@
+---
+# ──────────────────────────────────────────────────────────────────────────────
+# Secret — PostgreSQL + MongoDB credentials
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ecp-order-secrets
+  namespace: ecp-dev
+type: Opaque
+stringData:
+  postgres-connection: "Host=postgres.ecp-dev.svc.cluster.local;Port=5432;Database=OrderDb;Username=postgres;Password=postgres"
+  mongo-connection: "mongodb://root:pass168@mongodb.ecp-dev.svc.cluster.local:27017"
+
+---
+# ══════════════════════════════════════════════════════════════════════════════
+# ECP ORDER SERVICE
+# ══════════════════════════════════════════════════════════════════════════════
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecp-order
+  namespace: ecp-dev
+  labels:
+    app: ecp-order
+    app.kubernetes.io/name: ecp-order
+    version: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ecp-order
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: ecp-order
+        app.kubernetes.io/name: ecp-order
+        version: dev
+    spec:
+      # ── Wait for all dependencies before starting ────────────────────────────
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z postgres.ecp-dev.svc.cluster.local 5432; do
+                echo "Waiting for PostgreSQL..."
+                sleep 3
+              done
+              echo "PostgreSQL ready!"
+        - name: wait-for-kafka
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z kafka.ecp-dev.svc.cluster.local 9092; do
+                echo "Waiting for Kafka..."
+                sleep 3
+              done
+              echo "Kafka ready!"
+        - name: wait-for-mongodb
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z mongodb.ecp-dev.svc.cluster.local 27017; do
+                echo "Waiting for MongoDB..."
+                sleep 3
+              done
+              echo "MongoDB ready!"
+
+      containers:
+        - name: ecp-order
+          image: ecp-order:dev
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Development"
+            - name: ASPNETCORE_URLS
+              value: "http://+:8080"
+
+            # ── PostgreSQL ───────────────────────────────────────────────────
+            - name: ConnectionStrings__OrderConnections
+              valueFrom:
+                secretKeyRef:
+                  name: ecp-order-secrets
+                  key: postgres-connection
+
+            # ── MongoDB ──────────────────────────────────────────────────────
+            - name: ConnectionStrings__MongoDb
+              valueFrom:
+                secretKeyRef:
+                  name: ecp-order-secrets
+                  key: mongo-connection
+
+            # ── Kafka — overrides "localhost:9092" in Program.cs ─────────────
+            - name: Kafka__BootstrapServers
+              value: "kafka.ecp-dev.svc.cluster.local:9092"
+
+            # ── Inter-service calls via ClusterDNS ───────────────────────────
+            - name: Services__WarehouseUrl
+              value: "http://ecp-warehouse.ecp-dev.svc.cluster.local"
+            - name: Services__OrderAnalyserUrl
+              value: "http://ecp-order-analyser.ecp-dev.svc.cluster.local"
+
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+      restartPolicy: Always
+
+---
+# ──────────────────────────────────────────────────────────────────────────────
+# Service (ClusterIP)
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: ecp-order
+  namespace: ecp-dev
+  labels:
+    app: ecp-order
+spec:
+  type: ClusterIP
+  selector:
+    app: ecp-order
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+
+---
+# ──────────────────────────────────────────────────────────────────────────────
+# Ingress — Gateway (YARP) auto-discovers via annotations
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecp-order-ingress
+  namespace: ecp-dev
+  labels:
+    app: ecp-order
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+
+    # ── CORS ──────────────────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,Authorization,Content-Type,X-Correlation-ID"
+
+    # ── Timeouts ──────────────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+
+    # ── Gateway (YARP) Discovery ──────────────────────────────────────────────
+    proxy.gateway/enabled: "true"
+    proxy.gateway/route-path: "/api/order/{**catch-all}"
+    proxy.gateway/strip-prefix: "true"
+    proxy.gateway/health-path: "/health"
+    proxy.gateway/destination-url: "http://ecp-order.ecp-dev.svc.cluster.local"
+
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: ecp-order.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ecp-order
+                port:
+                  number: 80

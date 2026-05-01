@@ -15,7 +15,7 @@ builder.Services.AddSwaggerGen();
 
 // Configure PostgreSQL with EF Core
 var connectionString = builder.Configuration.GetConnectionString("OrderConnections")
-                       ?? "Host=localhost;Port=5432;Database=OrderDb;Username=postgres;Password=postgres";
+                       ?? "Host=postgres.ecp-dev.svc.cluster.local;Port=5432;Database=OrderDb;Username=postgres;Password=postgres";
 
 builder.Services.AddDbContext<OrderDbContext>(options =>
     options.UseNpgsql(connectionString, npgsqlOptions =>
@@ -57,8 +57,10 @@ builder.Services.AddMassTransit(x =>
 
         rider.UsingKafka((context, k) =>
         {
-            k.Host("localhost:9092");
-
+            // k.Host("localhost:9092");
+            
+            k.Host(builder.Configuration["Kafka:BootstrapServers"] ?? "kafka.ecp-dev.svc.cluster.local");
+            
             // CONSUMER ENDPOINT 1
             k.TopicEndpoint<OrderFailed>("order-failed", "orchestrator", e =>
             {
@@ -92,6 +94,12 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+}
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
+    db.Database.Migrate();
 }
 
 app.MapHealthChecks("/health");

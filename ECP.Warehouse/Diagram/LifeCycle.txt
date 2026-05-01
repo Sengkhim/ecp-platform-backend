@@ -1,0 +1,137 @@
+┌─────────────────────────────────────────────────────────────────┐
+│                        CLIENT (Browser / curl)                  │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │  HTTP Request
+                              │  GET http://ecp-warehouse.dev/api/analyst/orders
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        /etc/hosts  (or DNS)                     │
+│                                                                 │
+│   ecp-warehouse.dev  →  192.168.49.2  (minikube ip)            │
+│                      →  192.168.1.200 (MetalLB ip in prod)      │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │  Resolved IP + Request
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   MetalLB (Production only)                     │
+│                                                                 │
+│   Assigns real external IP to LoadBalancer Service             │
+│   Announces IP to the network via L2/BGP                       │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              LoadBalancer Service (ecp-warehouse-lb)            │
+│                                                                 │
+│   type: LoadBalancer                                            │
+│   port: 80  →  targetPort: 8080                                 │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│             Nginx Ingress Controller (ingress-nginx)            │
+│                                                                 │
+│   Reads all Ingress rules in the cluster                        │
+│   Matches:  host = ecp-warehouse.dev                           │
+│             path = /                                            │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  Ingress (ecp-warehouse-ingress)                │
+│                                                                 │
+│   host:  ecp-warehouse.dev                                      │
+│   path:  /  →  service: ecp-warehouse  port: 80                │
+│                                                                 │
+│   Annotations applied:                                          │
+│   ├── rewrite-target: /                                         │
+│   ├── enable-cors: true                                         │
+│   ├── proxy-connect-timeout: 30s                                │
+│   ├── proxy-send-timeout: 60s                                   │
+│   ├── proxy-read-timeout: 60s                                   │
+│   └── proxy-body-size: 10m                                      │
+│                                                                 │
+│   Gateway annotations applied:                                  │
+│   ├── route-path: /api/analyst/{**catch-all}                    │
+│   ├── strip-prefix: true                                        │
+│   └── health-path: /health/live                                 │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │  Forwarded to ClusterIP
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│               ClusterIP Service (ecp-warehouse)                 │
+│                                                                 │
+│   type: ClusterIP  (internal only)                              │
+│   port: 80  →  targetPort: 8080                                 │
+│   selector: app = ecp-warehouse                                 │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │  Routes to matching Pod
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  Pod  (ecp-warehouse)                           │
+│                                                                 │
+│   Deployment:  replicas: 1                                      │
+│   image:       ecp-warehouse:dev                                │
+│   container:   port 8080                                        │
+│                                                                 │
+│   ENV:                                                          │
+│   ├── ASPNETCORE_ENVIRONMENT = Development                      │
+│   └── ASPNETCORE_URLS        = http://+:8080                    │
+│                                                                 │
+│   Resources:                                                    │
+│   ├── CPU:    250m  request  /  500m  limit                     │
+│   └── Memory: 256Mi request  /  512Mi limit                     │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │  App processes request
+                              │  HTTP Response
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   Response travels back up                      │
+│                                                                 │
+│   Pod  →  ClusterIP  →  Ingress  →  LoadBalancer  →  Client    │
+└─────────────────────────────────────────────────────────────────┘
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ALTERNATE ACCESS PATHS (bypass Ingress)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  NodePort (Minikube dev only)
+  ─────────────────────────────
+  curl http://192.168.49.2:30080
+        │
+        └──  NodePort Service (ecp-warehouse-nodeport)
+                  port: 30080  →  targetPort: 8080
+                        │
+                        └──  Pod :8080
+
+
+  Port-Forward (local debug only)
+  ────────────────────────────────
+  kubectl port-forward svc/ecp-warehouse 8080:80
+  curl http://localhost:8080
+        │
+        └──  Tunnel direct to ClusterIP Service
+                  port: 80  →  targetPort: 8080
+                      │
+                      └──  Pod :8080
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  NAMESPACE BOUNDARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Everything inside [ ecp-dev ] namespace:
+  ┌───────────────────────────────────────┐
+  │  Deployment: ecp-warehouse            │
+  │  Service:    ecp-warehouse (ClusterIP)│
+  │  Service:    ecp-warehouse-lb (LB)    │
+  │  Service:    ecp-warehouse-nodeport   │
+  │  Ingress:    ecp-warehouse-ingress    │
+  └───────────────────────────────────────┘
+
+  Outside [ ecp-dev ] namespace:
+  ┌───────────────────────────────────────┐
+  │  ingress-nginx  (ingress controller)  │
+  │  metallb-system (MetalLB)             │
+  └───────────────────────────────────────┘

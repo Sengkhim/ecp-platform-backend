@@ -4,11 +4,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Contracts", "Contracts\Cont
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ECP.Saga.Orchestrator", "ECP.Saga.Orchestrator\ECP.Saga.Orchestrator.csproj", "{E81C5971-DBC2-4E28-9C1B-C7F3C0D5C824}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{57AFA812-8EA6-426A-A442-7A6B2E4D5C25}"
-	ProjectSection(SolutionItems) = preProject
-		compose.yaml = compose.yaml
-	EndProjectSection
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ECP.NotificationService", "ECP.NotificationService\ECP.NotificationService.csproj", "{5A73D32C-3EE7-4902-B973-5C2F0D901E50}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ECP.OrderService", "ECP.OrderService\ECP.OrderService.csproj", "{7C00CD36-558A-4B8F-A806-30DB44028DA1}"
@@ -20,6 +15,21 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ECP.OrderAnalyserService", "ECP.OrderAnalyserService\ECP.OrderAnalyserService.csproj", "{692AAC38-96F7-4EED-A745-9571EA7221E2}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ECP.Warehouse", "ECP.Warehouse\ECP.Warehouse.csproj", "{500BECD8-5CED-4F9C-A118-B8834A592C78}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Warehouse", "Warehouse", "{B327EDEC-D418-404B-B03C-1FFBE8B6B801}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ECP.ProductService", "ECP.ProductService\ECP.ProductService.csproj", "{FA9F921E-C634-4F86-A85D-79B15682BF4C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Src", "Src", "{7329303B-8ED5-4B1B-AABB-E067C9D3160C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "k8s", "k8s", "{C5B2755D-346B-4E70-9288-7515B424BF0E}"
+	ProjectSection(SolutionItems) = preProject
+		1_zookeeper.yaml = 1_zookeeper.yaml
+		2_kafka.yaml = 2_kafka.yaml
+		3_mongo_db.yaml = 3_mongo_db.yaml
+		4_postgres_db.yaml = 4_postgres_db.yaml
+		5_redis.yaml = 5_redis.yaml
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -59,7 +69,13 @@ Global
 		{500BECD8-5CED-4F9C-A118-B8834A592C78}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{500BECD8-5CED-4F9C-A118-B8834A592C78}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{500BECD8-5CED-4F9C-A118-B8834A592C78}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FA9F921E-C634-4F86-A85D-79B15682BF4C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FA9F921E-C634-4F86-A85D-79B15682BF4C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FA9F921E-C634-4F86-A85D-79B15682BF4C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FA9F921E-C634-4F86-A85D-79B15682BF4C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
+		{FA9F921E-C634-4F86-A85D-79B15682BF4C} = {B327EDEC-D418-404B-B03C-1FFBE8B6B801}
+		{C5B2755D-346B-4E70-9288-7515B424BF0E} = {7329303B-8ED5-4B1B-AABB-E067C9D3160C}
 	EndGlobalSection
 EndGlobal
