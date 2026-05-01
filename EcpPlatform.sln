@@ -24,7 +24,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Src", "Src", "{7329303B-8ED
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "k8s", "k8s", "{C5B2755D-346B-4E70-9288-7515B424BF0E}"
 	ProjectSection(SolutionItems) = preProject
-		1_infrastructure.yaml = 1_infrastructure.yaml
+		1_zookeeper.yaml = 1_zookeeper.yaml
+		2_kafka.yaml = 2_kafka.yaml
+		3_mongo_db.yaml = 3_mongo_db.yaml
+		4_postgres_db.yaml = 4_postgres_db.yaml
+		5_redis.yaml = 5_redis.yaml
 	EndProjectSection
 EndProject
 Global

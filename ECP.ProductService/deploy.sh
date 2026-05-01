@@ -7,9 +7,6 @@ docker build --no-cache -t ecp-product-service:dev -f Dockerfile .
 echo "☸️  Applying Kubernetes manifests..."
 kubectl apply -f deployment.yaml
 
-echo "⏳ Waiting for rollout..."
-kubectl rollout status deployment/ecp-product-service -n ecp-dev
-
 echo "✅ Done. Pods:"
 kubectl get pods -n ecp-dev -l app=ecp-product-service
 
