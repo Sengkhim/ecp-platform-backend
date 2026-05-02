@@ -63,7 +63,7 @@ spec:
 
       containers:
         - name: ecp-saga-orchestrator
-          image: ecp-saga-orchestrator:dev
+          image: saga.orchestrator:dev
           imagePullPolicy: Never
           ports:
             - containerPort: 8080

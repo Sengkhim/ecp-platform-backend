@@ -7,11 +7,9 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["ECP.ProductService.csproj", "ECP.ProductService/"]
+COPY ["ECP.ProductService/ECP.ProductService.csproj", "ECP.ProductService/"]
 RUN dotnet restore "ECP.ProductService/ECP.ProductService.csproj"
-
-COPY . ./ECP.ProductService/
-
+COPY . .
 WORKDIR "/src/ECP.ProductService"
 RUN dotnet build "./ECP.ProductService.csproj" -c $BUILD_CONFIGURATION -o /app/build
 

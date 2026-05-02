@@ -83,7 +83,7 @@ spec:
       serviceAccountName: api-gateway
       containers:
         - name: api-gateway
-          image: api-gateway:dev
+          image: apigateway:dev
           imagePullPolicy: Never
           ports:
             - containerPort: 8080

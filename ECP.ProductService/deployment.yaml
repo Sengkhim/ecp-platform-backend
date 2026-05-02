@@ -155,7 +155,7 @@ spec:
 
       containers:
         - name: ecp-product-service
-          image: ecp-product-service:dev
+          image: ecp.productservice:dev
           ports:
             - containerPort: 8080
 

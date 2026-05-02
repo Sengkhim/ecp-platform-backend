@@ -40,7 +40,7 @@ spec:
     spec:
       containers:
         - name: ecp-warehouse
-          image: ecp-warehouse:dev
+          image: warehouse:dev
           imagePullPolicy: Never
           ports:
             - containerPort: 8080

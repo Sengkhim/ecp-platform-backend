@@ -27,7 +27,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "k8s", "k8s", "{C5B2755D-346
 		3_mongo_db.yaml = 3_mongo_db.yaml
 		4_postgres_db.yaml = 4_postgres_db.yaml
 		5_redis.yaml = 5_redis.yaml
-		inf_deploy.sh = inf_deploy.sh
 		app_deploy.sh = app_deploy.sh
 	EndProjectSection
 EndProject

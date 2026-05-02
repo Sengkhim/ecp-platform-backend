@@ -68,7 +68,7 @@ spec:
 
       containers:
         - name: ecp-notification
-          image: ecp-notification:dev
+          image: notificationservice:dev
           imagePullPolicy: Never
           ports:
             - containerPort: 8080

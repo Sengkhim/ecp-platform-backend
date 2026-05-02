@@ -44,7 +44,7 @@ spec:
 
       containers:
         - name: ecp-payment
-          image: ecp-payment:dev
+          image: paymentservice:dev
           imagePullPolicy: Never
           ports:
             - containerPort: 8080

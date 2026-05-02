@@ -80,7 +80,7 @@ spec:
 
       containers:
         - name: ecp-order
-          image: ecp-order:dev
+          image: orderservice:dev
           imagePullPolicy: Never
           ports:
             - containerPort: 8080
