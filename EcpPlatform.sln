@@ -12,8 +12,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ECP.PaymentService", "ECP.P
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ECP.ApiGateway", "ECP.ApiGateway\ECP.ApiGateway.csproj", "{7B2CF8C4-02A8-4087-A1FB-D83735E27236}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ECP.OrderAnalyserService", "ECP.OrderAnalyserService\ECP.OrderAnalyserService.csproj", "{692AAC38-96F7-4EED-A745-9571EA7221E2}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ECP.Warehouse", "ECP.Warehouse\ECP.Warehouse.csproj", "{500BECD8-5CED-4F9C-A118-B8834A592C78}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Warehouse", "Warehouse", "{B327EDEC-D418-404B-B03C-1FFBE8B6B801}"
@@ -29,6 +27,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "k8s", "k8s", "{C5B2755D-346
 		3_mongo_db.yaml = 3_mongo_db.yaml
 		4_postgres_db.yaml = 4_postgres_db.yaml
 		5_redis.yaml = 5_redis.yaml
+		inf_deploy.sh = inf_deploy.sh
+		app_deploy.sh = app_deploy.sh
 	EndProjectSection
 EndProject
 Global
@@ -61,10 +61,6 @@ Global
 		{7B2CF8C4-02A8-4087-A1FB-D83735E27236}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7B2CF8C4-02A8-4087-A1FB-D83735E27236}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7B2CF8C4-02A8-4087-A1FB-D83735E27236}.Release|Any CPU.Build.0 = Release|Any CPU
-		{692AAC38-96F7-4EED-A745-9571EA7221E2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{692AAC38-96F7-4EED-A745-9571EA7221E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{692AAC38-96F7-4EED-A745-9571EA7221E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{692AAC38-96F7-4EED-A745-9571EA7221E2}.Release|Any CPU.Build.0 = Release|Any CPU
 		{500BECD8-5CED-4F9C-A118-B8834A592C78}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{500BECD8-5CED-4F9C-A118-B8834A592C78}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{500BECD8-5CED-4F9C-A118-B8834A592C78}.Release|Any CPU.ActiveCfg = Release|Any CPU

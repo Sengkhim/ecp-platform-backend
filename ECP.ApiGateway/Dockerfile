@@ -2,14 +2,14 @@
 USER $APP_UID
 WORKDIR /app
 EXPOSE 8080
+EXPOSE 8081
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["ECP.ApiGateway.csproj", "ECP.ApiGateway/"]
+COPY ["ECP.ApiGateway/ECP.ApiGateway.csproj", "ECP.ApiGateway/"]
 RUN dotnet restore "ECP.ApiGateway/ECP.ApiGateway.csproj"
-COPY . ./ECP.ApiGateway/
-
+COPY . .
 WORKDIR "/src/ECP.ApiGateway"
 RUN dotnet build "./ECP.ApiGateway.csproj" -c $BUILD_CONFIGURATION -o /app/build
 

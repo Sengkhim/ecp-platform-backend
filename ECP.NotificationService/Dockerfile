@@ -9,12 +9,8 @@ ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["ECP.NotificationService/ECP.NotificationService.csproj", "ECP.NotificationService/"]
 COPY ["Contracts/Contracts.csproj", "Contracts/"]
-
 RUN dotnet restore "ECP.NotificationService/ECP.NotificationService.csproj"
-
-COPY ECP.NotificationService/ ECP.NotificationService/
-COPY Contracts/ Contracts/
-
+COPY . .
 WORKDIR "/src/ECP.NotificationService"
 RUN dotnet build "./ECP.NotificationService.csproj" -c $BUILD_CONFIGURATION -o /app/build
 

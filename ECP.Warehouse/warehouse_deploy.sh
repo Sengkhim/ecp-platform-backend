@@ -6,11 +6,6 @@ echo "=========================================="
 # Delete the namespace (this will delete all resources within it)
 #kubectl delete namespace ecp-dev
 
-echo ""
-echo "=========================================="
-echo "Rebuild image for OrbStack Kubernetes"
-echo "=========================================="
-
 # OrbStack shares local Docker images directly — no image load needed!
 docker build -t ecp-warehouse:dev .
 

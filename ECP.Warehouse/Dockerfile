@@ -7,16 +7,15 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["ECP.Warehouse.csproj", "ECP.Warehouse/"]
+COPY ["ECP.Warehouse/ECP.Warehouse.csproj", "ECP.Warehouse/"]
 RUN dotnet restore "ECP.Warehouse/ECP.Warehouse.csproj"
-COPY . ./ECP.Warehouse/
-
+COPY . .
 WORKDIR "/src/ECP.Warehouse"
-RUN dotnet build "ECP.Warehouse.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN dotnet build "./ECP.Warehouse.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "ECP.Warehouse.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "./ECP.Warehouse.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
 WORKDIR /app

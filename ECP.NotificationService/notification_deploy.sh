@@ -4,7 +4,8 @@ echo "Rebuild image for OrbStack Kubernetes"
 echo "=========================================="
 
 # Build from parent folder so Contracts project is accessible
-docker build -t ecp-notification:dev -f Dockerfile ..
+docker build -t ecp-notification:dev .
+#docker build -t ecp-warehouse:dev .
 
 if [ $? -ne 0 ]; then
   echo "❌ Docker build failed — aborting"
