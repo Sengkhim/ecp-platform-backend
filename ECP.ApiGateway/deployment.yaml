@@ -1,8 +1,19 @@
 ---
-# ──────────────────────────────────────────────────────────────────────────────
-# ServiceAccount
-# ── Required by KubernetesServiceDiscoveryProvider to watch Ingress resources
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Namespace
+# ══════════════════════════════════════════════════════════════════════════════
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ecp-dev
+  labels:
+    app.kubernetes.io/name: ecp
+    environment: development
+
+---
+# ══════════════════════════════════════════════════════════════════════════════
+# ServiceAccount — Required by KubernetesServiceDiscoveryProvider to watch Ingress resources
+# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -12,11 +23,9 @@ metadata:
     app.kubernetes.io/name: api-gateway
 
 ---
-# ──────────────────────────────────────────────────────────────────────────────
-# Role (namespace-scoped)
-# ── FIX: Downgraded from ClusterRole → Role (least privilege)
-# ── Gateway only needs to read Ingresses inside ecp-dev namespace
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Role (namespace-scoped) — Least privilege: only read Ingresses in ecp-dev
+# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -30,10 +39,9 @@ rules:
     verbs: ["get", "list", "watch"]
 
 ---
-# ──────────────────────────────────────────────────────────────────────────────
-# RoleBinding
-# ── FIX: Downgraded from ClusterRoleBinding → RoleBinding
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# RoleBinding — Binds the Role to the ServiceAccount
+# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -51,9 +59,53 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 
 ---
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# ConfigMap — Gateway configuration (can be overridden by environment variables)
+# ══════════════════════════════════════════════════════════════════════════════
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-gateway-config
+  namespace: ecp-dev
+  labels:
+    app.kubernetes.io/name: api-gateway
+data:
+  appsettings.json: |
+    {
+      "Logging": {
+        "LogLevel": {
+          "Default": "Information",
+          "Microsoft.AspNetCore": "Warning",
+          "Yarp": "Information",
+          "ECP.ApiGateway": "Information"
+        }
+      },
+      "AllowedHosts": "*",
+      "Kubernetes": {
+        "Namespace": "ecp-dev",
+        "IngressBaseUrl": "http://ecp-warehouse.ecp-dev.svc.cluster.local"
+      },
+      "Gateway": {
+        "EnableRateLimiting": false,
+        "DefaultRateLimitPermitLimit": 100,
+        "DefaultRateLimitWindowSeconds": 10
+      },
+      "HealthChecks": {
+        "Enable": true,
+        "Path": "/health"
+      },
+      "Cors": {
+        "Enable": true,
+        "AllowedOrigins": ["*"],
+        "AllowedMethods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "AllowedHeaders": ["DNT", "X-CustomHeader", "Keep-Alive", "User-Agent", "Authorization", "Content-Type", "X-Correlation-ID"]
+      }
+    }
+
+---
+# ══════════════════════════════════════════════════════════════════════════════
 # Deployment
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -83,7 +135,7 @@ spec:
       serviceAccountName: api-gateway
       containers:
         - name: api-gateway
-          image: apigateway:dev
+          image: ecp.apigateway:dev
           imagePullPolicy: Never
           ports:
             - containerPort: 8080
@@ -94,12 +146,10 @@ spec:
               value: "Development"
             - name: ASPNETCORE_URLS
               value: "http://+:8080"
-            # Namespace where gateway watches for Ingress resources
+            # Kubernetes namespace where gateway watches for Ingress resources
             - name: Kubernetes__Namespace
               value: "ecp-dev"
-            # FIX: was "http://epc-warehouse" (typo)
-            # Points to ClusterIP service name — used as fallback base URL
-            # YARP uses this when no proxy.gateway/destination-url annotation is set
+            # Fallback destination URL (used when Ingress has no destination-url annotation)
             - name: Kubernetes__IngressBaseUrl
               value: "http://ecp-warehouse.ecp-dev.svc.cluster.local"
             - name: Gateway__EnableRateLimiting
@@ -131,12 +181,24 @@ spec:
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
+          volumeMounts:
+            - name: config
+              mountPath: /app/appsettings.json
+              subPath: appsettings.json
+              readOnly: true
       restartPolicy: Always
+      volumes:
+        - name: config
+          configMap:
+            name: api-gateway-config
+            items:
+              - key: appsettings.json
+                path: appsettings.json
 
 ---
-# ──────────────────────────────────────────────────────────────────────────────
-# Service (ClusterIP)
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Service (ClusterIP) — Internal cluster communication
+# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: v1
 kind: Service
 metadata:
@@ -157,9 +219,9 @@ spec:
   sessionAffinity: None
 
 ---
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 # Service (LoadBalancer) — MetalLB production / minikube tunnel macOS
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: v1
 kind: Service
 metadata:
@@ -180,10 +242,9 @@ spec:
   sessionAffinity: None
 
 ---
-# ──────────────────────────────────────────────────────────────────────────────
-# Service (NodePort) — Minikube direct access
-# ── Access via: http://<minikube-ip>:30081
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Service (NodePort) — Minikube direct access via http://<minikube-ip>:30081
+# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: v1
 kind: Service
 metadata:
@@ -205,11 +266,11 @@ spec:
   sessionAffinity: None
 
 ---
-# ──────────────────────────────────────────────────────────────────────────────
-# Ingress
-# ── Routes external traffic into api-gateway
-# ── No proxy.gateway annotations here — gateway does NOT proxy itself
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Ingress — Routes external traffic into api-gateway
+# IMPORTANT: This Ingress is for nginx to route TO the gateway, NOT for the gateway to proxy
+# It does NOT have proxy.gateway/enabled annotation, so the gateway will ignore it
+# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -219,27 +280,26 @@ metadata:
     app: api-gateway
     app.kubernetes.io/name: api-gateway
   annotations:
+    # ══════════════════════════════════════════════════════════════════════════
+    # IMPORTANT: Do NOT add proxy.gateway/enabled: "true" here!
+    # This Ingress is for nginx to route external traffic TO the gateway.
+    # The gateway should NOT try to proxy this Ingress - it would create a loop.
+    # ══════════════════════════════════════════════════════════════════════════
+    
     nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
-
-    # ── CORS ──────────────────────────────────────────────────────────────────
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "*"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,Authorization,Content-Type,X-Correlation-ID"
-
-    # ── Timeouts ──────────────────────────────────────────────────────────────
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
-
-    # ── Max upload size ───────────────────────────────────────────────────────
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-
 spec:
   ingressClassName: nginx
   rules:
-    # ⚠️ Add to /etc/hosts: 192.168.49.2 api-gateway.dev
+    # Add to /etc/hosts: 192.168.49.2 api-gateway.dev
     - host: api-gateway.dev
       http:
         paths:

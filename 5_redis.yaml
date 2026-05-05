@@ -1,18 +1,3 @@
-
----
-# Redis Secret
-apiVersion: v1
-kind: Secret
-metadata:
-  name: redis-secrets
-  namespace: ecp-dev
-type: Opaque
-stringData:
-  redis-password: "redis123"
-  
-  
----
-# Redis Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -35,39 +20,44 @@ spec:
           image: redis:7-alpine
           ports:
             - containerPort: 6379
-              name: redis
-
-          # Enable password authentication
-          command: ["redis-server"]
-          args:
-            - "--requirepass"
-            - "$(REDIS_PASSWORD)"
-
-          env:
-            - name: REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: redis-secrets
-                  key: redis-password
-
+          command: ["redis-server", "--appendonly", "yes"]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
           volumeMounts:
             - name: redis-data
               mountPath: /data
-
-          resources:
-            requests:
-              memory: "128Mi"
-              cpu: "100m"
-            limits:
-              memory: "256Mi"
-              cpu: "300m"
-
       volumes:
         - name: redis-data
-          emptyDir: {}   # Use PVC in production
-
+          persistentVolumeClaim:
+            claimName: redis-pvc
 ---
-# Redis Service
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: ecp-dev
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -76,11 +66,95 @@ metadata:
   labels:
     app: redis
 spec:
-  type: ClusterIP
   selector:
     app: redis
   ports:
-    - name: redis
-      port: 6379
+    - port: 6379
       targetPort: 6379
-      protocol: TCP
+
+#
+#---
+## Redis Secret
+#apiVersion: v1
+#kind: Secret
+#metadata:
+#  name: redis-secrets
+#  namespace: ecp-dev
+#type: Opaque
+#stringData:
+#  redis-password: "redis123"
+#  
+#  
+#---
+## Redis Deployment
+#apiVersion: apps/v1
+#kind: Deployment
+#metadata:
+#  name: redis
+#  namespace: ecp-dev
+#  labels:
+#    app: redis
+#spec:
+#  replicas: 1
+#  selector:
+#    matchLabels:
+#      app: redis
+#  template:
+#    metadata:
+#      labels:
+#        app: redis
+#    spec:
+#      containers:
+#        - name: redis
+#          image: redis:7-alpine
+#          ports:
+#            - containerPort: 6379
+#              name: redis
+#
+#          # Enable password authentication
+#          command: ["redis-server"]
+#          args:
+#            - "--requirepass"
+#            - "$(REDIS_PASSWORD)"
+#
+#          env:
+#            - name: REDIS_PASSWORD
+#              valueFrom:
+#                secretKeyRef:
+#                  name: redis-secrets
+#                  key: redis-password
+#
+#          volumeMounts:
+#            - name: redis-data
+#              mountPath: /data
+#
+#          resources:
+#            requests:
+#              memory: "128Mi"
+#              cpu: "100m"
+#            limits:
+#              memory: "256Mi"
+#              cpu: "300m"
+#
+#      volumes:
+#        - name: redis-data
+#          emptyDir: {}   # Use PVC in production
+#
+#---
+## Redis Service
+#apiVersion: v1
+#kind: Service
+#metadata:
+#  name: redis
+#  namespace: ecp-dev
+#  labels:
+#    app: redis
+#spec:
+#  type: ClusterIP
+#  selector:
+#    app: redis
+#  ports:
+#    - name: redis
+#      port: 6379
+#      targetPort: 6379
+#      protocol: TCP

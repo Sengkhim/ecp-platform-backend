@@ -67,7 +67,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres
-  namespace: ecp-dev
+  namespace: ecp-dev 
   labels:
     app: postgres
 spec:

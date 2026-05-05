@@ -64,7 +64,7 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
     private readonly IKubernetes _k8S;
     private readonly ILogger<KubernetesServiceDiscoveryProvider> _logger;
     private readonly string _namespace;
-    private readonly string _ingressBaseUrl;
+    private readonly string? _ingressBaseUrl;
     private readonly CancellationTokenSource _cts = new();
     private readonly ConcurrentDictionary<string, V1Ingress> _cache = new();
 
@@ -80,7 +80,7 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
         _k8S            = k8S;
         _logger         = logger;
         _namespace      = configuration["Kubernetes:Namespace"] ?? "ecp-dev";
-        _ingressBaseUrl = configuration["Kubernetes:IngressBaseUrl"] ?? "http://ecp-warehouse";
+        _ingressBaseUrl = configuration["Kubernetes:IngressBaseUrl"];  // Optional fallback
 
         // Start with an empty snapshot — YARP subscribes to its ChangeToken.
         // The K8s watcher will fire immediately with existing ingresses,
@@ -210,10 +210,14 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
 
             // ── destination + host ─────────────────────────────────────────
             var destinationAddress = ResolveDestinationAddress(ingress, destinationUrl, scheme);
-            var effectiveHost      = hostHeaderOverride
-                                  ?? ExtractHostFromUrl(destinationUrl)
-                                  ?? ExtractIngressRuleHost(ingress)
-                                  ?? new Uri(_ingressBaseUrl).Host;
+            
+            // Determine the Host header to send to the upstream service
+            // Priority: explicit host-header annotation > destination URL host > IngressBaseUrl host > Ingress rule host
+            var effectiveHost = hostHeaderOverride
+                             ?? ExtractHostFromUrl(destinationUrl)
+                             ?? (_ingressBaseUrl is not null ? new Uri(_ingressBaseUrl).Host : null)
+                             ?? ExtractIngressRuleHost(ingress)
+                             ?? "localhost";
 
             var ingressName = ingress.Name();
             var clusterId   = $"cluster-{ingressName}";
@@ -339,18 +343,30 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
     }
     #endregion
 
-    #region  Hepler method
+    #region  Helper method
 
     private string ResolveDestinationAddress(V1Ingress ingress, string? explicitUrl, string scheme)
     {
+        // 1. If explicit destination-url annotation is set, use it
         if (!string.IsNullOrWhiteSpace(explicitUrl))
             return explicitUrl.TrimEnd('/');
-
-        var host = ExtractIngressRuleHost(ingress);
         
-        return !string.IsNullOrWhiteSpace(host)
-            ? $"{scheme}://{host}" 
-            : _ingressBaseUrl.TrimEnd('/');
+        // 2. If _ingressBaseUrl is configured, use it as the default destination
+        //    This is the typical case: gateway proxies to a known backend service
+        if (!string.IsNullOrWhiteSpace(_ingressBaseUrl))
+            return _ingressBaseUrl.TrimEnd('/');
+        
+        // 3. Fallback: Try to extract host from Ingress rules
+        //    Note: This is rarely used since Ingress rule hosts are typically for nginx, not backend services
+        var host = ExtractIngressRuleHost(ingress);
+        if (!string.IsNullOrWhiteSpace(host))
+            return $"{scheme}://{host}";
+        
+        // 4. No destination configured - throw informative error
+        throw new InvalidOperationException(
+            $"No destination URL configured for ingress {ingress.Name()}/{ingress.Namespace()}. " +
+            $"Either set 'proxy.gateway/destination-url' annotation on the Ingress, " +
+            $"or configure 'Kubernetes:IngressBaseUrl' in application settings.");
     }
 
     private static string? ExtractHostFromUrl(string? url)

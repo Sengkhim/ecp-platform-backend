@@ -1,12 +1,14 @@
 ---
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 # Secret — PostgreSQL + MongoDB credentials
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: v1
 kind: Secret
 metadata:
   name: ecp-order-secrets
   namespace: ecp-dev
+  labels:
+    app: ecp-order
 type: Opaque
 stringData:
   postgres-connection: "Host=postgres.ecp-dev.svc.cluster.local;Port=5432;Database=OrderDb;Username=postgres;Password=postgres"
@@ -144,9 +146,9 @@ spec:
       restartPolicy: Always
 
 ---
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 # Service (ClusterIP)
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: v1
 kind: Service
 metadata:
@@ -154,6 +156,7 @@ metadata:
   namespace: ecp-dev
   labels:
     app: ecp-order
+    app.kubernetes.io/name: ecp-order
 spec:
   type: ClusterIP
   selector:
@@ -163,49 +166,69 @@ spec:
       port: 80
       targetPort: 8080
       protocol: TCP
+  sessionAffinity: None
 
 ---
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 # Ingress — Gateway (YARP) auto-discovers via annotations
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: ecp-order-ingress
+  name: ecp-order
   namespace: ecp-dev
   labels:
     app: ecp-order
+    app.kubernetes.io/name: ecp-order
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
+    # ══════════════════════════════════════════════════════════════════════════
+    # REQUIRED: Gateway discovery annotations
+    # These tell the KubernetesServiceDiscoveryProvider to create a route
+    # ══════════════════════════════════════════════════════════════════════════
+    proxy.gateway/enabled: "true"
+    proxy.gateway/route-path: "/api/order/{**catch-all}"
+    
+    # ══════════════════════════════════════════════════════════════════════════
+    # OPTIONAL: Strip the /api/order prefix before forwarding
+    # With this enabled:
+    #   Gateway receives: /api/order/123
+    #   Order service receives: /123
+    # ══════════════════════════════════════════════════════════════════════════
+    proxy.gateway/strip-prefix: "true"
+    
+    # ══════════════════════════════════════════════════════════════════════════
+    # OPTIONAL: Override destination URL
+    # If not set, uses the fallback from Kubernetes:IngressBaseUrl config
+    # ══════════════════════════════════════════════════════════════════════════
+    proxy.gateway/destination-url: "http://ecp-order.ecp-dev.svc.cluster.local"
+    
+    # ══════════════════════════════════════════════════════════════════════════
+    # OPTIONAL: Health check path for active health monitoring
+    # ══════════════════════════════════════════════════════════════════════════
+    proxy.gateway/health-path: "/health"
+    
+    # ══════════════════════════════════════════════════════════════════════════
+    # nginx ingress controller annotations
+    # ══════════════════════════════════════════════════════════════════════════
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
-
-    # ── CORS ──────────────────────────────────────────────────────────────────
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "*"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,Authorization,Content-Type,X-Correlation-ID"
-
-    # ── Timeouts ──────────────────────────────────────────────────────────────
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
 
-    # ── Gateway (YARP) Discovery ──────────────────────────────────────────────
-    proxy.gateway/enabled: "true"
-    proxy.gateway/route-path: "/api/order/{**catch-all}"
-    proxy.gateway/strip-prefix: "true"
-    proxy.gateway/health-path: "/health"
-    proxy.gateway/destination-url: "http://ecp-order.ecp-dev.svc.cluster.local"
-
 spec:
   ingressClassName: nginx
   rules:
-    - host: ecp-order.dev
+    - host: api-gateway.dev
       http:
         paths:
-          - path: /
-            pathType: Prefix
+          - path: /api/order(/|$)(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: ecp-order

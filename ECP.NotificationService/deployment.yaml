@@ -1,20 +1,22 @@
 ---
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 # Secret — MongoDB credentials
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: v1
 kind: Secret
 metadata:
   name: ecp-notification-secrets
   namespace: ecp-dev
+  labels:
+    app: ecp-notification
 type: Opaque
 stringData:
   mongo-connection: "mongodb://root:pass168@mongodb.ecp-dev.svc.cluster.local:27017"
 
 ---
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 # Deployment
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -125,9 +127,9 @@ spec:
       restartPolicy: Always
 
 ---
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 # Service (ClusterIP)
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: v1
 kind: Service
 metadata:
@@ -148,51 +150,66 @@ spec:
   sessionAffinity: None
 
 ---
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 # Ingress — Gateway (YARP) auto-discovers via annotations
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: ecp-notification-ingress
+  name: ecp-notification
   namespace: ecp-dev
   labels:
     app: ecp-notification
     app.kubernetes.io/name: ecp-notification
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
+    # ══════════════════════════════════════════════════════════════════════════
+    # REQUIRED: Gateway discovery annotations
+    # These tell the KubernetesServiceDiscoveryProvider to create a route
+    # ══════════════════════════════════════════════════════════════════════════
+    proxy.gateway/enabled: "true"
+    proxy.gateway/route-path: "/api/notification/{**catch-all}"
+    
+    # ══════════════════════════════════════════════════════════════════════════
+    # OPTIONAL: Strip the /api/notification prefix before forwarding
+    # With this enabled:
+    #   Gateway receives: /api/notification/status
+    #   Notification receives: /status
+    # ══════════════════════════════════════════════════════════════════════════
+    proxy.gateway/strip-prefix: "true"
+    
+    # ══════════════════════════════════════════════════════════════════════════
+    # OPTIONAL: Override destination URL
+    # If not set, uses the fallback from Kubernetes:IngressBaseUrl config
+    # ══════════════════════════════════════════════════════════════════════════
+    proxy.gateway/destination-url: "http://ecp-notification.ecp-dev.svc.cluster.local"
+    
+    # ══════════════════════════════════════════════════════════════════════════
+    # OPTIONAL: Health check path for active health monitoring
+    # ══════════════════════════════════════════════════════════════════════════
+    proxy.gateway/health-path: "/health"
+    
+    # ══════════════════════════════════════════════════════════════════════════
+    # nginx ingress controller annotations
+    # ══════════════════════════════════════════════════════════════════════════
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
-
-    # ── CORS ──────────────────────────────────────────────────────────────────
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "*"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,Authorization,Content-Type,X-Correlation-ID"
-
-    # ── Timeouts ──────────────────────────────────────────────────────────────
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
 
-    # ── Gateway (YARP) Discovery ──────────────────────────────────────────────
-    # Route: /api/notification/{**catch-all}
-    #   → strips /api/notification
-    #   → forwards to http://ecp-notification.ecp-dev.svc.cluster.local/{catch-all}
-    proxy.gateway/enabled: "true"
-    proxy.gateway/route-path: "/api/notification/{**catch-all}"
-    proxy.gateway/strip-prefix: "true"
-    proxy.gateway/health-path: "/health"
-    proxy.gateway/destination-url: "http://ecp-notification.ecp-dev.svc.cluster.local"
-
 spec:
   ingressClassName: nginx
   rules:
-    - host: ecp-notification.dev
+    - host: api-gateway.dev
       http:
         paths:
-          - path: /
-            pathType: Prefix
+          - path: /api/notification(/|$)(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: ecp-notification

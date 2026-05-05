@@ -81,3 +81,32 @@ echo "=========================================="
 echo "   DEPLOYMENT FINISHED"
 echo "   Run 'kubectl get pods' to check status"
 echo "=========================================="
+
+
+echo ""
+echo "=========================================="
+echo "   DEPLOYMENT SERVICES"
+echo "=========================================="
+
+# Deploy all services
+kubectl apply -f ECP.ApiGateway/deployment.yaml
+kubectl apply -f ECP.ProductService/deployment.yaml
+kubectl apply -f ECP.Warehouse/deployment.yaml
+kubectl apply -f ECP.NotificationService/deployment.yaml
+kubectl apply -f ECP.OrderService/deployment.yaml
+kubectl apply -f ECP.PaymentService/deployment.yaml
+kubectl apply -f ECP.Saga.Orchestrator/deployment.yaml
+
+# Watch gateway discover external routes
+#kubectl logs -n ecp-dev deployment/api-gateway -f
+
+# Expected routes:
+# /api/ecp-warehouse/{**catch-all} → http://ecp-warehouse.ecp-dev.svc.cluster.local
+# /api/notification/{**catch-all} → http://ecp-notification.ecp-dev.svc.cluster.local
+# /api/order/{**catch-all} → http://ecp-order.ecp-dev.svc.cluster.local
+# /api/payment/{**catch-all} → http://ecp-payment.ecp-dev.svc.cluster.local
+
+echo ""
+echo "=========================================="
+echo "   DEPLOYMENT FINISHED"
+echo "=========================================="

@@ -1,75 +1,87 @@
 ---
-# ──────────────────────────────────────────────────────────────────────────────
-# Namespace
-# ──────────────────────────────────────────────────────────────────────────────
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: ecp-dev
-  labels:
-    name: ecp-dev
-    environment: development
-
----
-# ──────────────────────────────────────────────────────────────────────────────
-# Deployment
-# ──────────────────────────────────────────────────────────────────────────────
-apiVersion: apps/v1
-kind: Deployment
+# ══════════════════════════════════════════════════════════════════════════════
+# ECP Warehouse Service Ingress
+# This Ingress is discovered by the API Gateway's KubernetesServiceDiscoveryProvider
+# and automatically creates a route: /api/ecp-warehouse/{**catch-all}
+# ══════════════════════════════════════════════════════════════════════════════
+apiVersion: networking.k8s.io/v1
+kind: Ingress
 metadata:
   name: ecp-warehouse
   namespace: ecp-dev
   labels:
     app: ecp-warehouse
-    version: dev
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: ecp-warehouse
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
-  template:
-    metadata:
-      labels:
-        app: ecp-warehouse
-        version: dev
-    spec:
-      containers:
-        - name: ecp-warehouse
-          image: warehouse:dev
-          imagePullPolicy: Never
-          ports:
-            - containerPort: 8080
-              name: http
-              protocol: TCP
-          env:
-            - name: ASPNETCORE_ENVIRONMENT
-              value: "Development"
-            - name: ASPNETCORE_URLS
-              value: "http://+:8080"
-            # FIX: Disable HTTPS redirect — running plain HTTP inside cluster
-            - name: ASPNETCORE_HTTP_PORTS
-              value: "8080"
-          resources:
-            requests:
-              memory: "256Mi"
-              cpu: "250m"
-            limits:
-              memory: "512Mi"
-              cpu: "500m"
+    app.kubernetes.io/name: ecp-warehouse
+  annotations:
+    # ══════════════════════════════════════════════════════════════════════════
+    # REQUIRED: Gateway discovery annotations
+    # These tell the KubernetesServiceDiscoveryProvider to create a route for this service
+    # ══════════════════════════════════════════════════════════════════════════
+    proxy.gateway/enabled: "true"
+    proxy.gateway/route-path: "/api/ecp-warehouse/{**catch-all}"
+    
+    # ══════════════════════════════════════════════════════════════════════════
+    # OPTIONAL: Strip the /api/ecp-warehouse prefix before forwarding
+    # With this enabled:
+    #   Gateway receives: /api/ecp-warehouse/status
+    #   Warehouse receives: /status
+    # Without this:
+    #   Gateway receives: /api/ecp-warehouse/status
+    #   Warehouse receives: /api/ecp-warehouse/status
+    # ══════════════════════════════════════════════════════════════════════════
+    proxy.gateway/strip-prefix: "true"
+    
+    # ══════════════════════════════════════════════════════════════════════════
+    # OPTIONAL: Override destination URL
+    # If not set, uses the fallback from Kubernetes:IngressBaseUrl config
+    # or extracts from Ingress spec.rules[].host
+    # ══════════════════════════════════════════════════════════════════════════
+    # proxy.gateway/destination-url: "http://ecp-warehouse.ecp-dev.svc.cluster.local"
+    
+    # ══════════════════════════════════════════════════════════════════════════
+    # OPTIONAL: Health check path for active health monitoring
+    # ══════════════════════════════════════════════════════════════════════════
+    proxy.gateway/health-path: "/health"
+    
+    # ══════════════════════════════════════════════════════════════════════════
+    # OPTIONAL: Custom host header to send to upstream
+    # If not set, extracted from destination-url or ingress host
+    # ══════════════════════════════════════════════════════════════════════════
+    # proxy.gateway/host-header: "ecp-warehouse.local"
+    
+    # ══════════════════════════════════════════════════════════════════════════
+    # nginx ingress controller annotations
+    # These are read by the gateway and applied to the proxy
+    # ══════════════════════════════════════════════════════════════════════════
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,Authorization,Content-Type,X-Correlation-ID"
 
-      restartPolicy: Always
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api-gateway.dev
+      http:
+        paths:
+          - path: /api/ecp-warehouse(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: ecp-warehouse
+                port:
+                  number: 80
 
 ---
-# ──────────────────────────────────────────────────────────────────────────────
-# Service (ClusterIP)
-# ── Used by api-gateway YARP to forward requests internally
-# ── gateway calls: http://ecp-warehouse (cluster DNS) → this service → pod
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# ECP Warehouse Service (example — adjust based on your actual warehouse deployment)
+# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: v1
 kind: Service
 metadata:
@@ -77,6 +89,7 @@ metadata:
   namespace: ecp-dev
   labels:
     app: ecp-warehouse
+    app.kubernetes.io/name: ecp-warehouse
 spec:
   type: ClusterIP
   selector:
@@ -89,120 +102,64 @@ spec:
   sessionAffinity: None
 
 ---
-# ──────────────────────────────────────────────────────────────────────────────
-# Service (NodePort) — Minikube direct access
-# ── Access via: http://<minikube-ip>:30080
-# ──────────────────────────────────────────────────────────────────────────────
-apiVersion: v1
-kind: Service
+# ══════════════════════════════════════════════════════════════════════════════
+# ECP Warehouse Deployment (example — adjust based on your actual warehouse app)
+# ══════════════════════════════════════════════════════════════════════════════
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: ecp-warehouse-nodeport
+  name: ecp-warehouse
   namespace: ecp-dev
   labels:
     app: ecp-warehouse
+    app.kubernetes.io/name: ecp-warehouse
+    version: dev
 spec:
-  type: NodePort
+  replicas: 1
   selector:
-    app: ecp-warehouse
-  ports:
-    - name: http
-      port: 80
-      targetPort: 8080
-      nodePort: 30080
-      protocol: TCP
-  sessionAffinity: None
-
----
-# ──────────────────────────────────────────────────────────────────────────────
-# Service (LoadBalancer) — MetalLB production
-# ──────────────────────────────────────────────────────────────────────────────
-apiVersion: v1
-kind: Service
-metadata:
-  name: ecp-warehouse-lb
-  namespace: ecp-dev
-  labels:
-    app: ecp-warehouse
-spec:
-  type: LoadBalancer
-  selector:
-    app: ecp-warehouse
-  ports:
-    - name: http
-      port: 80
-      targetPort: 8080
-      protocol: TCP
-  sessionAffinity: None
-
----
-# ──────────────────────────────────────────────────────────────────────────────
-# Ingress
-# ── Exposes warehouse externally at ecp-warehouse.dev
-# ── Also read by api-gateway KubernetesServiceDiscoveryProvider:
-# ──   proxy.gateway/enabled      = true   → gateway picks this up
-# ──   proxy.gateway/route-path   = /api/ecp-warehouse/{**catch-all}
-# ──   proxy.gateway/strip-prefix = true   → strips /api/ecp-warehouse
-# ──   destination                = http://ecp-warehouse (ClusterIP DNS)
-# ──
-# ── FIX: route-path was "/api/epc-warehouse" (typo) → "/api/ecp-warehouse"
-# ── FIX: added proxy.gateway/destination-url pointing to ClusterIP
-# ──      so YARP calls ecp-warehouse directly inside cluster (no DNS loop)
-# ──────────────────────────────────────────────────────────────────────────────
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ecp-warehouse-ingress
-  namespace: ecp-dev
-  labels:
-    app: ecp-warehouse
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
-
-    # ── CORS ──────────────────────────────────────────────────────────────────
-    nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
-    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,Authorization,Content-Type,X-Correlation-ID"
-
-    # ── Timeouts ──────────────────────────────────────────────────────────────
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
-
-    # ── Max upload size ───────────────────────────────────────────────────────
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-
-    # ── API Gateway (YARP) discovery ──────────────────────────────────────────
-    # The gateway watches this ingress and builds a YARP route:
-    #   /api/ecp-warehouse/{**catch-all}  →  strip prefix  →  http://ecp-warehouse
-    #
-    # proxy.gateway/destination-url points to ClusterIP service name (not external host)
-    # This means YARP forwards directly inside the cluster — fast, no external DNS needed
-    #
-    # Example:
-    #   curl http://api-gateway.dev/api/ecp-warehouse/
-    #     → YARP strips /api/ecp-warehouse
-    #     → forwards to http://ecp-warehouse/
-    #     → ClusterIP routes to ecp-warehouse pod :8080
-    #     → returns WeatherForecast ✅
-    proxy.gateway/enabled: "true"
-    proxy.gateway/route-path: "/api/ecp-warehouse/{**catch-all}"  # ✅ ecp
-    proxy.gateway/strip-prefix: "true"
-    proxy.gateway/destination-url: "http://ecp-warehouse.ecp-dev.svc.cluster.local"
-    proxy.gateway/health-path: "/health/live"
-
-spec:
-  ingressClassName: nginx
-  rules:
-    # ⚠️ Add to /etc/hosts: 192.168.49.2 ecp-warehouse.dev
-    - host: ecp-warehouse.dev
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: ecp-warehouse
-                port:
-                  number: 80
+    matchLabels:
+      app: ecp-warehouse
+  template:
+    metadata:
+      labels:
+        app: ecp-warehouse
+        app.kubernetes.io/name: ecp-warehouse
+        version: dev
+    spec:
+      containers:
+        - name: ecp-warehouse
+          image: ecp.warehouse:dev
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Development"
+            - name: ASPNETCORE_URLS
+              value: "http://+:8080"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+      restartPolicy: Always
