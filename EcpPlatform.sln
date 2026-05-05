@@ -30,6 +30,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "k8s", "k8s", "{C5B2755D-346
 		app_deploy.sh = app_deploy.sh
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Clients", "Clients", "{BB3C00C5-6677-4CAD-A13A-510AFF80B430}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -72,5 +74,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{FA9F921E-C634-4F86-A85D-79B15682BF4C} = {B327EDEC-D418-404B-B03C-1FFBE8B6B801}
 		{C5B2755D-346B-4E70-9288-7515B424BF0E} = {7329303B-8ED5-4B1B-AABB-E067C9D3160C}
+		{BB3C00C5-6677-4CAD-A13A-510AFF80B430} = {7329303B-8ED5-4B1B-AABB-E067C9D3160C}
 	EndGlobalSection
 EndGlobal
