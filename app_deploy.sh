@@ -59,7 +59,7 @@ do
   echo "🐳 Building image: $IMAGE_NAME:dev"
   
   # Build from root context to satisfy project references (Contracts)
-  docker build -t "$IMAGE_NAME:dev" -f "$SERVICE/Dockerfile" .
+#  docker build -t "$IMAGE_NAME:dev" -f "$SERVICE/Dockerfile" .
 
   # Note: We skip 'docker run' here because you are deploying to Kubernetes instead.
 done
