@@ -136,7 +136,7 @@ spec:
       containers:
         - name: api-gateway
           image: ecp.apigateway:dev
-          imagePullPolicy: Never
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
               name: http

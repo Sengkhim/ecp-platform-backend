@@ -32,11 +32,11 @@ echo "=========================================="
 
 SERVICES=(
   "ECP.Warehouse"
-  "ECP.ProductService"
-  "ECP.NotificationService"
-  "ECP.OrderService"
-  "ECP.PaymentService"
-  "ECP.Saga.Orchestrator"
+#  "ECP.ProductService"
+#  "ECP.NotificationService"
+#  "ECP.OrderService"
+#  "ECP.PaymentService"
+#  "ECP.Saga.Orchestrator"
   "ECP.ApiGateway"
 )
 
