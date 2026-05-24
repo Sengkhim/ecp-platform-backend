@@ -411,11 +411,11 @@ spec:
   ingressClassName: nginx
 
   rules:
-    - host: api.ecp.com
+    - host: api-gateway.ecp.prod
       http:
         paths:
-          - path: /ecp-warehouse(/|$)(.*)
-            pathType: ImplementationSpecific
+          - path: /
+            pathType: Prefix
             backend:
               service:
                 name: api-gateway
