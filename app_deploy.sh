@@ -11,11 +11,11 @@ echo "=========================================="
 # Ensure the namespace exists first if you use one
 # kubectl apply -f namespace.yaml 
 
-kubectl apply -f 1_zookeeper.yaml
-kubectl apply -f 2_kafka.yaml
-kubectl apply -f 3_mongo_db.yaml
-kubectl apply -f 4_postgres_db.yaml
-kubectl apply -f 5_redis.yaml
+#kubectl apply -f 1_zookeeper.yaml
+#kubectl apply -f 2_kafka.yaml
+#kubectl apply -f 3_mongo_db.yaml
+#kubectl apply -f 4_postgres_db.yaml
+#kubectl apply -f 5_redis.yaml
 
 echo ""
 echo "=========================================="
