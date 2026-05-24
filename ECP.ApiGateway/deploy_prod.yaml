@@ -1,14 +1,10 @@
-# ══════════════════════════════════════════════════════════════════════════════
-# ECP API GATEWAY - PRODUCTION READY
-# Namespace: ecp-prod
-# Environment: Production
-# .NET 8 + YARP + Kubernetes Ingress Discovery
-# ══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════
+# ECP API GATEWAY - FIXED SINGLE FILE
+# Kubernetes + YARP + NGINX + MetalLB (OrbStack)
+# ═════════════════════════════════════════════════════════════
 
 ---
-# ══════════════════════════════════════════════════════════════════════════════
-# Namespace
-# ══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════ Namespace ═════════════════════
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -18,21 +14,15 @@ metadata:
     environment: production
 
 ---
-# ══════════════════════════════════════════════════════════════════════════════
-# ServiceAccount
-# ══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════ ServiceAccount ═════════════════════
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: api-gateway
   namespace: ecp-prod
-  labels:
-    app.kubernetes.io/name: api-gateway
 
 ---
-# ══════════════════════════════════════════════════════════════════════════════
-# Role
-# ══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════ RBAC Role ═════════════════════
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -44,9 +34,6 @@ rules:
     verbs: ["get", "list", "watch"]
 
 ---
-# ══════════════════════════════════════════════════════════════════════════════
-# RoleBinding
-# ══════════════════════════════════════════════════════════════════════════════
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -56,16 +43,13 @@ subjects:
   - kind: ServiceAccount
     name: api-gateway
     namespace: ecp-prod
-
 roleRef:
   kind: Role
   name: api-gateway-ingress-reader
   apiGroup: rbac.authorization.k8s.io
 
 ---
-# ══════════════════════════════════════════════════════════════════════════════
-# ConfigMap
-# ══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════ ConfigMap ═════════════════════
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -78,55 +62,17 @@ data:
         "LogLevel": {
           "Default": "Information",
           "Microsoft.AspNetCore": "Warning",
-          "Yarp": "Information",
-          "ECP.ApiGateway": "Information"
+          "Yarp": "Information"
         }
       },
-
       "AllowedHosts": "*",
-
-      "Kubernetes": {
-        "Namespace": "ecp-prod",
-        "IngressBaseUrl": "http://ecp-warehouse.ecp-prod.svc.cluster.local"
-      },
-
       "Gateway": {
-        "EnableRateLimiting": true,
-        "DefaultRateLimitPermitLimit": 100,
-        "DefaultRateLimitWindowSeconds": 10
-      },
-
-      "HealthChecks": {
-        "Enable": true,
-        "Path": "/health"
-      },
-
-      "Cors": {
-        "Enable": true,
-        "AllowedOrigins": [
-          "https://app.epc.com"
-        ],
-        "AllowedMethods": [
-          "GET",
-          "POST",
-          "PUT",
-          "DELETE",
-          "OPTIONS"
-        ],
-        "AllowedHeaders": [
-          "Authorization",
-          "Content-Type",
-          "X-Correlation-ID"
-        ]
+        "EnableRateLimiting": true
       }
     }
 
 ---
-# ══════════════════════════════════════════════════════════════════════════════
-# Secret Example
-# Replace values with actual base64 values
-# echo -n "value" | base64
-# ══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════ Secret ═════════════════════
 apiVersion: v1
 kind: Secret
 metadata:
@@ -135,268 +81,67 @@ metadata:
 type: Opaque
 data:
   JWT_SECRET: c2VjcmV0
-  API_KEY: c2VjcmV0
 
 ---
-# ══════════════════════════════════════════════════════════════════════════════
-# Deployment
-# ══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════ Deployment ═════════════════════
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api-gateway
   namespace: ecp-prod
-  labels:
-    app: api-gateway
-    app.kubernetes.io/name: api-gateway
-    environment: production
-
 spec:
   replicas: 2
-
-  revisionHistoryLimit: 5
-
-  strategy:
-    type: RollingUpdate
-
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
-
   selector:
     matchLabels:
       app: api-gateway
-
   template:
     metadata:
       labels:
         app: api-gateway
-        app.kubernetes.io/name: api-gateway
-        environment: production
-
     spec:
       serviceAccountName: api-gateway
-
-      terminationGracePeriodSeconds: 30
-
       containers:
         - name: api-gateway
-
           image: devkhim/ecp.apigateway:dev
-
-          imagePullPolicy: IfNotPresent
-
           ports:
             - containerPort: 8080
-              name: http
-              protocol: TCP
-
           env:
-            - name: ASPNETCORE_ENVIRONMENT
-              value: "Production"
-
             - name: ASPNETCORE_URLS
               value: "http://+:8080"
-
-            - name: Kubernetes__Namespace
-              value: "ecp-prod"
-
-            - name: Kubernetes__IngressBaseUrl
-              value: "http://ecp-warehouse.ecp-prod.svc.cluster.local"
-
-            - name: Gateway__EnableRateLimiting
-              value: "true"
-
-            - name: Gateway__DefaultRateLimitPermitLimit
-              value: "100"
-
-            - name: Gateway__DefaultRateLimitWindowSeconds
-              value: "10"
-
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Production"
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: api-gateway-secret
                   key: JWT_SECRET
-
-          resources:
-            requests:
-              cpu: "200m"
-              memory: "256Mi"
-
-            limits:
-              cpu: "1000m"
-              memory: "512Mi"
-
           readinessProbe:
             httpGet:
               path: /health/ready
               port: 8080
-
             initialDelaySeconds: 10
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
-
           livenessProbe:
             httpGet:
               path: /health/live
               port: 8080
-
             initialDelaySeconds: 20
-            periodSeconds: 20
-            timeoutSeconds: 5
-            failureThreshold: 3
-
-          startupProbe:
-            httpGet:
-              path: /health/live
-              port: 8080
-
-            failureThreshold: 30
-            periodSeconds: 5
-
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 1001
-            allowPrivilegeEscalation: false
-
-          volumeMounts:
-            - name: config
-              mountPath: /app/config
-              readOnly: true
-
-      restartPolicy: Always
-
-      volumes:
-        - name: config
-          configMap:
-            name: api-gateway-config
 
 ---
-# ══════════════════════════════════════════════════════════════════════════════
-# Service (ClusterIP)
-# ══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════ Service (ClusterIP) ═════════════════════
 apiVersion: v1
 kind: Service
 metadata:
   name: api-gateway
   namespace: ecp-prod
-  labels:
-    app: api-gateway
-    app.kubernetes.io/name: api-gateway
-
 spec:
-  type: ClusterIP
-
   selector:
     app: api-gateway
-
   ports:
-    - name: http
-      port: 80
+    - port: 80
       targetPort: 8080
-      protocol: TCP
 
 ---
-# ══════════════════════════════════════════════════════════════════════════════
-# Horizontal Pod Autoscaler
-# ══════════════════════════════════════════════════════════════════════════════
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: api-gateway
-  namespace: ecp-prod
-
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: api-gateway
-
-  minReplicas: 3
-  maxReplicas: 10
-
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-
-        target:
-          type: Utilization
-          averageUtilization: 70
-
----
-# ══════════════════════════════════════════════════════════════════════════════
-# Pod Disruption Budget
-# ══════════════════════════════════════════════════════════════════════════════
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: api-gateway
-  namespace: ecp-prod
-
-spec:
-  minAvailable: 1
-
-  selector:
-    matchLabels:
-      app: api-gateway
-
----
-# ══════════════════════════════════════════════════════════════════════════════
-# Ingress
-# External traffic enters here
-# ══════════════════════════════════════════════════════════════════════════════
-#apiVersion: networking.k8s.io/v1
-#kind: Ingress
-#metadata:
-#  name: api-gateway-ingress
-#  namespace: ecp-prod
-#
-#  annotations:
-#    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-#    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-#
-#    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
-#    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
-#    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
-#
-#    nginx.ingress.kubernetes.io/proxy-body-size: "20m"
-#
-#    nginx.ingress.kubernetes.io/enable-cors: "true"
-#
-#    nginx.ingress.kubernetes.io/cors-allow-origin: "https://app.ecp.com"
-#
-#    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
-#
-#    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization,Content-Type,X-Correlation-ID"
-#
-#    nginx.ingress.kubernetes.io/limit-rps: "20"
-#    nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
-#
-#spec:
-#  ingressClassName: nginx
-#
-#  tls:
-#    - hosts:
-#        - api.ecp.com
-#      secretName: api-ecp-tls
-#
-#  rules:
-#    - host: api.ecp.com
-#
-#      http:
-#        paths:
-#          - path: /
-#            pathType: Prefix
-#
-#            backend:
-#              service:
-#                name: api-gateway
-#                port:
-#                  number: 80
-
+# ═════════════════════ Ingress ═════════════════════
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -404,7 +149,6 @@ metadata:
   namespace: ecp-prod
 spec:
   ingressClassName: nginx
-
   rules:
     - host: api-gateway.ecp.prod
       http:
@@ -416,20 +160,20 @@ spec:
                 name: api-gateway
                 port:
                   number: 80
-                  
----               
+
+---
+# ═════════════════════ METALLB (EXTERNAL ACCESS FIX) ═════════════════════
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
-  name: default-pool
+  name: prod-pool
   namespace: metallb-system
 spec:
   addresses:
     - 192.168.139.240-192.168.139.250
-#    - 172.16.0.240-172.16.0.250
 ---
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
 metadata:
-  name: l2
+  name: prod-advertise
   namespace: metallb-system

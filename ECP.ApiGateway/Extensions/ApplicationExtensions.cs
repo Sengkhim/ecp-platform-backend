@@ -11,7 +11,6 @@ public static class ApplicationExtensions
         {
             app.MapReverseProxy(pipeline =>
             {
-                // Diagnostic: log exactly what YARP is forwarding
                 pipeline.Use(async (context, next) =>
                 {
                     var logger = context.RequestServices
@@ -20,8 +19,7 @@ public static class ApplicationExtensions
                     var proxyFeature = context.GetReverseProxyFeature();
                     var dest = proxyFeature.AvailableDestinations
                         .FirstOrDefault()?.Model.Config.Address ?? "unknown";
-
-                    // Log BEFORE transforms — what came in from the client
+                    
                     logger.LogInformation(
                         "[YARP PRE]  Route={Route} | IncomingPath={Path} | IncomingHost={Host}",
                         proxyFeature.Route.Config.RouteId,
@@ -32,8 +30,7 @@ public static class ApplicationExtensions
                         "[YARP PRE]  Destination={Dest} | Transforms={Count}",
                         dest,
                         proxyFeature.Route.Config.Transforms?.Count ?? 0);
-
-                    // Dump every transform
+                    
                     if (proxyFeature.Route.Config.Transforms is { } trs)
                         foreach (var t in trs)
                             logger.LogInformation("[YARP TRANSFORM] {T}",
