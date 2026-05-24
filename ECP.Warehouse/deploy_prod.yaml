@@ -118,7 +118,7 @@ spec:
 
       containers:
         - name: ecp-warehouse
-          image: devkhim/epc.warehouse:v3
+          image: devkhim/epc.warehouse:v4
           imagePullPolicy: IfNotPresent
 
           ports:
