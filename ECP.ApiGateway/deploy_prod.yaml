@@ -396,16 +396,11 @@ spec:
 #                name: api-gateway
 #                port:
 #                  number: 80
-
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: api-gateway-ingress
   namespace: ecp-prod
-
-  annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
 
 spec:
   ingressClassName: nginx
@@ -414,14 +409,13 @@ spec:
     - host: api-gateway.ecp.prod
       http:
         paths:
-          - path: /
+          - path: /health
             pathType: Prefix
             backend:
               service:
                 name: api-gateway
                 port:
                   number: 80
-                  
                   
 ---               
 apiVersion: metallb.io/v1beta1
