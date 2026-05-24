@@ -90,12 +90,12 @@ echo "=========================================="
 
 # Deploy all services
 kubectl apply -f ECP.ApiGateway/deployment.yaml
-kubectl apply -f ECP.ProductService/deployment.yaml
+#kubectl apply -f ECP.ProductService/deployment.yaml
 kubectl apply -f ECP.Warehouse/deployment.yaml
-kubectl apply -f ECP.NotificationService/deployment.yaml
-kubectl apply -f ECP.OrderService/deployment.yaml
-kubectl apply -f ECP.PaymentService/deployment.yaml
-kubectl apply -f ECP.Saga.Orchestrator/deployment.yaml
+#kubectl apply -f ECP.NotificationService/deployment.yaml
+#kubectl apply -f ECP.OrderService/deployment.yaml
+#kubectl apply -f ECP.PaymentService/deployment.yaml
+#kubectl apply -f ECP.Saga.Orchestrator/deployment.yaml
 
 # Watch gateway discover external routes
 #kubectl logs -n ecp-dev deployment/api-gateway -f
