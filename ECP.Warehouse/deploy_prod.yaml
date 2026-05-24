@@ -1,59 +1,3 @@
-# ════════════════════════════════════════════════════════════════════════
-# ECP Warehouse - Production Ingress
-# ════════════════════════════════════════════════════════════════════════
-#apiVersion: networking.k8s.io/v1
-#kind: Ingress
-#metadata:
-#  name: ecp-warehouse
-#  namespace: ecp-prod
-#  labels:
-#    app: ecp-warehouse
-#    environment: production
-#
-#  annotations:
-#    proxy.gateway/enabled: "true"
-#    proxy.gateway/route-path: "/api/ecp-warehouse/{**catch-all}"
-#    proxy.gateway/strip-prefix: "true"
-#    proxy.gateway/health-path: "/health"
-#
-#    # NGINX
-#    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-#    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-#
-#    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
-#    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
-#    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
-#
-#    nginx.ingress.kubernetes.io/proxy-body-size: "20m"
-#
-#    # Security
-#    nginx.ingress.kubernetes.io/enable-cors: "true"
-#    nginx.ingress.kubernetes.io/cors-allow-origin: "https://your-frontend-domain.com"
-#
-#    # Rate limit
-#    nginx.ingress.kubernetes.io/limit-rps: "20"
-#    nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
-#
-#spec:
-#  ingressClassName: nginx
-#
-#  tls:
-#    - hosts:
-#        - api.ecp.com
-#      secretName: api-gateway-tls
-#
-#  rules:
-#    - host: api.ecp.com
-#      http:
-#        paths:
-#          - path: /api/ecp-warehouse
-#            pathType: Prefix
-#            backend:
-#              service:
-#                name: ecp-warehouse
-#                port:
-#                  number: 80
-
 ---
 # ════════════════════════════════════════════════════════════════════════
 # Service
@@ -118,7 +62,7 @@ spec:
 
       containers:
         - name: ecp-warehouse
-          image: devkhim/epc.warehouse:v4
+          image: devkhim/epc.warehouse:v5
           imagePullPolicy: IfNotPresent
 
           ports:
