@@ -396,12 +396,12 @@ spec:
 #                name: api-gateway
 #                port:
 #                  number: 80
+
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: api-gateway-ingress
   namespace: ecp-prod
-
 spec:
   ingressClassName: nginx
 
@@ -409,7 +409,7 @@ spec:
     - host: api-gateway.ecp.prod
       http:
         paths:
-          - path: /health
+          - path: /
             pathType: Prefix
             backend:
               service:
