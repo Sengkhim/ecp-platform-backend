@@ -39,7 +39,7 @@ spec:
 
       containers:
         - name: api-gateway
-          image: devkhim/ecp.apigateway:dev
+          image: devkhim/ecp.apigateway:prd_v1
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
