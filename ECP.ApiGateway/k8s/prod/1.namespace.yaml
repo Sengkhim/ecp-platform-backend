@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ecp-prod
+  labels:
+    app.kubernetes.io/name: ecp
+    environment: production
