@@ -13,7 +13,7 @@ metadata:
 type: Opaque
 stringData:
   mongo-connection: "mongodb://root:pass168@mongodb.ecp-prod.svc.cluster.local:27017"
-  redis-connection: "redis.ecp-prod.svc.cluster.local:6379"
+  redis-connection: "redis.ecp-prod.svc.cluster.local:6379,abortConnect=false,connectTimeout=5000,syncTimeout=5000"
 
 ---
 # ════════════════════════════════════════════════════════════════════════
