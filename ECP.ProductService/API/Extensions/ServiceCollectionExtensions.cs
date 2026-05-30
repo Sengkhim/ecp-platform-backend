@@ -24,10 +24,16 @@ public static class ServiceCollectionExtensions
         public IServiceCollection AddMongoDb(IConfiguration cfg)
         {
             var cs = cfg["MongoDB__ConnectionString"]
-                     ?? "mongodb://root:pass168@mongodb.ecp-dev.svc.cluster.local:27017";
+                     ?? "mongodb://root:pass168@mongodb.ecp-prod.svc.cluster.local:27017";
             var db = cfg["MongoDB__Database"] ?? "products";
 
-            services.AddSingleton<IMongoClient>(_ => new MongoClient(cs));
+            // ✅ Explicit settings — short server selection timeout prevents hanging
+            var settings = MongoClientSettings.FromConnectionString(cs);
+            settings.ServerSelectionTimeout = TimeSpan.FromSeconds(5);
+            settings.ConnectTimeout         = TimeSpan.FromSeconds(5);
+            settings.SocketTimeout          = TimeSpan.FromSeconds(10);
+
+            services.AddSingleton<IMongoClient>(_ => new MongoClient(settings));
             services.AddSingleton<IMongoDatabase>(sp => sp.GetRequiredService<IMongoClient>().GetDatabase(db));
             services.AddScoped<IProductRepository, MongoProductRepository>();
 
@@ -46,14 +52,15 @@ public static class ServiceCollectionExtensions
         
         public IServiceCollection AddRedisCache(IConfiguration cfg)
         {
-            var cs = cfg["Redis__ConnectionString"] 
+            var cs = cfg["Redis__ConnectionString"]
                      ?? "redis.ecp-prod.svc.cluster.local:6379,abortConnect=false";
 
+            // ✅ Explicit options — AbortOnConnectFail=false prevents startup crash
             var options = ConfigurationOptions.Parse(cs);
             options.AbortOnConnectFail = false;
-            options.ConnectTimeout = 5000;
-            options.SyncTimeout = 5000;
-            options.ConnectRetry = 5;
+            options.ConnectTimeout     = 5000;
+            options.SyncTimeout        = 5000;
+            options.ConnectRetry       = 5;
 
             services.AddSingleton<IConnectionMultiplexer>(
                 ConnectionMultiplexer.Connect(options)
@@ -113,21 +120,21 @@ public static class ServiceCollectionExtensions
             return services;
         }
 
-        public void AddServiceHealthChecks(IConfiguration _)
+        public void AddServiceHealthChecks(IConfiguration cfg)
         {
-            // var redis = cfg["Redis__ConnectionString"] ?? "redis.ecp-dev.svc.cluster.local:6379";
+            // ✅ Reuse existing singletons — no new connections created
             services
                 .AddHealthChecks()
-                .AddMongoDb(name: "mongodb", tags: ["db"])
+                .AddMongoDb(
+                    sp => sp.GetRequiredService<IMongoClient>(),
+                    name: "mongodb",
+                    tags: ["db"]
+                )
                 .AddRedis(
                     sp => sp.GetRequiredService<IConnectionMultiplexer>(),
                     name: "redis",
                     tags: ["cache"]
                 );
-            // services
-            //     .AddHealthChecks()
-            //     .AddMongoDb(name: "mongodb", tags: ["db"])
-            //     .AddRedis(redis,   name: "redis",   tags: ["cache"]);
         }
     }
 }
