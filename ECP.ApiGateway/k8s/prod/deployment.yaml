@@ -111,13 +111,13 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 3
 
-          securityContext:
-            runAsNonRoot: true
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop:
-                - ALL
+#          securityContext:
+#            runAsNonRoot: true
+#            allowPrivilegeEscalation: false
+#            readOnlyRootFilesystem: true
+#            capabilities:
+#              drop:
+#                - ALL
 
           volumeMounts:
             - name: tmp
