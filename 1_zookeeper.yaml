@@ -4,7 +4,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: zookeeper
-  namespace: ecp-dev
+  namespace: ecp-prod
   labels:
     app: zookeeper
 spec:
@@ -42,7 +42,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: zookeeper
-  namespace: ecp-dev
+  namespace: ecp-prod
   labels:
     app: zookeeper
 spec:
