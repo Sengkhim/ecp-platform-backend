@@ -34,11 +34,30 @@ public static class ServiceCollectionExtensions
             return services;
         }
 
+        // public IServiceCollection AddRedisCache(IConfiguration cfg)
+        // {
+        //     var cs = cfg["Redis__ConnectionString"] ?? "redis.ecp-dev.svc.cluster.local:6379";
+        //
+        //     services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(cs));
+        //     services.AddSingleton<ICacheService, RedisCacheService>();
+        //
+        //     return services;
+        // }
+        
         public IServiceCollection AddRedisCache(IConfiguration cfg)
         {
-            var cs = cfg["Redis__ConnectionString"] ?? "redis.ecp-dev.svc.cluster.local:6379";
+            var cs = cfg["Redis__ConnectionString"] 
+                     ?? "redis.ecp-prod.svc.cluster.local:6379,abortConnect=false";
 
-            services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(cs));
+            var options = ConfigurationOptions.Parse(cs);
+            options.AbortOnConnectFail = false;
+            options.ConnectTimeout = 5000;
+            options.SyncTimeout = 5000;
+            options.ConnectRetry = 5;
+
+            services.AddSingleton<IConnectionMultiplexer>(
+                ConnectionMultiplexer.Connect(options)
+            );
             services.AddSingleton<ICacheService, RedisCacheService>();
 
             return services;
@@ -94,14 +113,21 @@ public static class ServiceCollectionExtensions
             return services;
         }
 
-        public void AddServiceHealthChecks(IConfiguration cfg)
+        public void AddServiceHealthChecks(IConfiguration _)
         {
-            var redis = cfg["Redis__ConnectionString"] ?? "redis.ecp-dev.svc.cluster.local:6379";
-
+            // var redis = cfg["Redis__ConnectionString"] ?? "redis.ecp-dev.svc.cluster.local:6379";
             services
                 .AddHealthChecks()
                 .AddMongoDb(name: "mongodb", tags: ["db"])
-                .AddRedis(redis,   name: "redis",   tags: ["cache"]);
+                .AddRedis(
+                    sp => sp.GetRequiredService<IConnectionMultiplexer>(),
+                    name: "redis",
+                    tags: ["cache"]
+                );
+            // services
+            //     .AddHealthChecks()
+            //     .AddMongoDb(name: "mongodb", tags: ["db"])
+            //     .AddRedis(redis,   name: "redis",   tags: ["cache"]);
         }
     }
 }

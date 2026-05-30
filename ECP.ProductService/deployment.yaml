@@ -161,7 +161,7 @@ spec:
 
       containers:
         - name: ecp-product
-          image: devkhim/ecp.product:prod.1.0.0
+          image: devkhim/ecp.product:prod.1.0.1
           imagePullPolicy: Always
 
           ports:
