@@ -1,8 +1,13 @@
+# ════════════════════════════════════════════════════════════════════════
+# ConfigMap — Cloudflare Tunnel config
+# ════════════════════════════════════════════════════════════════════════
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: cloudflared-config
   namespace: ecp-prod
+  labels:
+    app: cloudflared
 
 data:
   config.yaml: |
@@ -10,26 +15,29 @@ data:
     credentials-file: /etc/cloudflared/creds/credentials.json
 
     ingress:
+      - hostname: warehouse.notcode.uk
+        service: http://ecp-warehouse.ecp-prod.svc.cluster.local:80
+
       - hostname: api.notcode.uk
         service: http://api-gateway.ecp-prod.svc.cluster.local:80
+
+      # catch-all — must always be last
       - service: http_status:404
 
 ---
 # ════════════════════════════════════════════════════════════════════════
-# Deployment — cloudflared tunnel pod
+# Deployment — cloudflared
 # ════════════════════════════════════════════════════════════════════════
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: cloudflared
   namespace: ecp-prod
-
   labels:
     app: cloudflared
 
 spec:
   replicas: 1
-
   selector:
     matchLabels:
       app: cloudflared
@@ -40,6 +48,9 @@ spec:
         app: cloudflared
 
     spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+
       containers:
         - name: cloudflared
           image: cloudflare/cloudflared:latest
@@ -92,13 +103,3 @@ spec:
         - name: creds
           secret:
             secretName: cloudflared-credentials
-  
-  
-#  sudo kubectl create secret generic cloudflared-credentials \
-#  --from-file=credentials.json=/home/binary/.cloudflared/3f43823c-5712-411b-b4b3-f875e75ebf3d.json \
-#  --namespace ecp-prod
-  
-#  sudo kubectl get secret cloudflared-credentials -n ecp-prod
-#  sudo kubectl rollout restart deployment/cloudflared -n ecp-prod
-#  cloudflared tunnel route dns ecp-platform api.notcode.uk
-

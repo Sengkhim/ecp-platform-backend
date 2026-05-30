@@ -1,16 +1,72 @@
 # ════════════════════════════════════════════════════════════════════════
 # Secret
 # ════════════════════════════════════════════════════════════════════════
-# WARNING: Do not commit this file to version control with real secrets.
-# Use a secrets manager or Kubernetes Secrets Tool instead.
+# WARNING: Do not commit real secrets to version control.
 apiVersion: v1
 kind: Secret
 metadata:
   name: api-gateway-secret
   namespace: ecp-prod
+  labels:
+    app: api-gateway
+    environment: production
 type: Opaque
 stringData:
   JWT_SECRET: "PyMK2JEBuRWxzcUJ28kxNYHyR0IQqUvlR7Ol8RTztK54VTjZJNYmcWqjLQryXdJGPaGzHvn1kVI+siZhT6sTWQ=="
+
+---
+# ════════════════════════════════════════════════════════════════════════
+# ServiceAccount
+# ════════════════════════════════════════════════════════════════════════
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api-gateway
+  namespace: ecp-prod
+  labels:
+    app: api-gateway
+
+---
+# ════════════════════════════════════════════════════════════════════════
+# Role — permissions to watch Ingress resources
+# ════════════════════════════════════════════════════════════════════════
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: api-gateway-role
+  namespace: ecp-prod
+  labels:
+    app: api-gateway
+
+rules:
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+
+---
+# ════════════════════════════════════════════════════════════════════════
+# RoleBinding
+# ════════════════════════════════════════════════════════════════════════
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: api-gateway-rolebinding
+  namespace: ecp-prod
+  labels:
+    app: api-gateway
+
+subjects:
+  - kind: ServiceAccount
+    name: api-gateway
+    namespace: ecp-prod
+
+roleRef:
+  kind: Role
+  apiGroup: rbac.authorization.k8s.io
+  name: api-gateway-role
 
 ---
 # ════════════════════════════════════════════════════════════════════════
@@ -26,7 +82,7 @@ metadata:
     environment: production
 
 spec:
-  replicas: 1
+  replicas: 3
   revisionHistoryLimit: 5
 
   selector:
@@ -46,17 +102,17 @@ spec:
         environment: production
 
     spec:
-      terminationGracePeriodSeconds: 30
+      serviceAccountName: api-gateway
+      automountServiceAccountToken: true    # required — app watches K8s Ingress resources
+      terminationGracePeriodSeconds: 60
 
       affinity:
         podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                topologyKey: kubernetes.io/hostname
-                labelSelector:
-                  matchLabels:
-                    app: api-gateway
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app: api-gateway
 
       containers:
         - name: api-gateway
@@ -66,6 +122,7 @@ spec:
           ports:
             - containerPort: 8080
               name: http
+              protocol: TCP
 
           env:
             - name: ASPNETCORE_URLS
@@ -77,6 +134,8 @@ spec:
                 secretKeyRef:
                   name: api-gateway-secret
                   key: JWT_SECRET
+            - name: DOTNET_GCConserveMemory
+              value: "5"
 
           resources:
             requests:
@@ -86,12 +145,14 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
+          # 30 × 5s = 150s max startup time before liveness kicks in
           startupProbe:
             httpGet:
               path: /health/live
               port: 8080
             failureThreshold: 30
             periodSeconds: 5
+            timeoutSeconds: 3
 
           readinessProbe:
             httpGet:
@@ -101,6 +162,7 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+            successThreshold: 1
 
           livenessProbe:
             httpGet:
@@ -111,10 +173,19 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 3
 
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
+
           securityContext:
-            runAsNonRoot: false
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
             capabilities:
               drop:
                 - ALL
@@ -122,10 +193,16 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: app-logs
+              mountPath: /app/logs
 
       volumes:
         - name: tmp
           emptyDir: {}
+        - name: app-logs
+          emptyDir: {}
+
+      restartPolicy: Always
 
 ---
 # ════════════════════════════════════════════════════════════════════════
@@ -138,6 +215,7 @@ metadata:
   namespace: ecp-prod
   labels:
     app: api-gateway
+    environment: production
 
 spec:
   type: ClusterIP
@@ -153,41 +231,118 @@ spec:
 # ════════════════════════════════════════════════════════════════════════
 # Horizontal Pod Autoscaler
 # ════════════════════════════════════════════════════════════════════════
-#apiVersion: autoscaling/v2
-#kind: HorizontalPodAutoscaler
-#metadata:
-#  name: api-gateway-hpa
-#  namespace: ecp-prod
-#
-#spec:
-#  scaleTargetRef:
-#    apiVersion: apps/v1
-#    kind: Deployment
-#    name: api-gateway
-#
-#  minReplicas: 3
-#  maxReplicas: 10
-#
-#  metrics:
-#    - type: Resource
-#      resource:
-#        name: cpu
-#        target:
-#          type: Utilization
-#          averageUtilization: 70
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-gateway-hpa
+  namespace: ecp-prod
+  labels:
+    app: api-gateway
+
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-gateway
+
+  minReplicas: 3
+  maxReplicas: 10
+
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
 
 ---
 # ════════════════════════════════════════════════════════════════════════
 # Pod Disruption Budget
 # ════════════════════════════════════════════════════════════════════════
-#apiVersion: policy/v1
-#kind: PodDisruptionBudget
-#metadata:
-#  name: api-gateway-pdb
-#  namespace: ecp-prod
-#
-#spec:
-#  minAvailable: 1
-#  selector:
-#    matchLabels:
-#      app: api-gateway
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-gateway-pdb
+  namespace: ecp-prod
+  labels:
+    app: api-gateway
+
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+
+---
+# ════════════════════════════════════════════════════════════════════════
+# Network Policy
+# ════════════════════════════════════════════════════════════════════════
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-gateway-netpol
+  namespace: ecp-prod
+  labels:
+    app: api-gateway
+
+spec:
+  podSelector:
+    matchLabels:
+      app: api-gateway
+
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Only allow traffic from cloudflared
+    - from:
+        - podSelector:
+            matchLabels:
+              app: cloudflared
+      ports:
+        - protocol: TCP
+          port: 8080
+
+  egress:
+    # Allow DNS resolution
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow calling K8s API server (needed for Ingress watcher)
+    - ports:
+        - protocol: TCP
+          port: 443
+    # Allow calling other services in ecp-prod
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ecp-prod
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 8080
