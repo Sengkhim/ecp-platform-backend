@@ -1,19 +1,19 @@
 # ════════════════════════════════════════════════════════════════════════
-# Secret — PostgreSQL + MongoDB credentials
+# Secret — MongoDB + Redis credentials
 # WARNING: Do not commit real secrets to version control.
 # ════════════════════════════════════════════════════════════════════════
 apiVersion: v1
 kind: Secret
 metadata:
-  name: ecp-order-secrets
+  name: ecp-product-secrets
   namespace: ecp-prod
   labels:
-    app: ecp-order
+    app: ecp-product
     environment: production
 type: Opaque
 stringData:
-  postgres-connection: "Host=postgres.ecp-prod.svc.cluster.local;Port=5432;Database=OrderDb;Username=postgres;Password=postgres"
   mongo-connection: "mongodb://root:pass168@mongodb.ecp-prod.svc.cluster.local:27017"
+  redis-connection: "redis.ecp-prod.svc.cluster.local:6379"
 
 ---
 # ════════════════════════════════════════════════════════════════════════
@@ -22,10 +22,10 @@ stringData:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: ecp-order
+  name: ecp-product
   namespace: ecp-prod
   labels:
-    app: ecp-order
+    app: ecp-product
 
 ---
 # ════════════════════════════════════════════════════════════════════════
@@ -34,16 +34,16 @@ metadata:
 apiVersion: v1
 kind: Service
 metadata:
-  name: ecp-order
+  name: ecp-product
   namespace: ecp-prod
   labels:
-    app: ecp-order
+    app: ecp-product
     environment: production
 
 spec:
   type: ClusterIP
   selector:
-    app: ecp-order
+    app: ecp-product
   ports:
     - name: http
       port: 80
@@ -58,10 +58,10 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ecp-order
+  name: ecp-product
   namespace: ecp-prod
   labels:
-    app: ecp-order
+    app: ecp-product
     environment: production
 
 spec:
@@ -70,7 +70,7 @@ spec:
 
   selector:
     matchLabels:
-      app: ecp-order
+      app: ecp-product
 
   strategy:
     type: RollingUpdate
@@ -81,11 +81,11 @@ spec:
   template:
     metadata:
       labels:
-        app: ecp-order
+        app: ecp-product
         environment: production
 
     spec:
-      serviceAccountName: ecp-order
+      serviceAccountName: ecp-product
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
 
@@ -97,66 +97,10 @@ spec:
                 topologyKey: kubernetes.io/hostname
                 labelSelector:
                   matchLabels:
-                    app: ecp-order
+                    app: ecp-product
 
-      # ── Wait for all dependencies before starting ──────────────────────
+      # ── Wait for dependencies ──────────────────────────────────────────
       initContainers:
-        - name: wait-for-postgres
-          image: busybox:1.36
-          imagePullPolicy: IfNotPresent
-          command:
-            - sh
-            - -c
-            - |
-              until nc -z postgres.ecp-prod.svc.cluster.local 5432; do
-                echo "Waiting for PostgreSQL..."
-                sleep 3
-              done
-              echo "PostgreSQL ready!"
-          resources:
-            requests:
-              cpu: "10m"
-              memory: "16Mi"
-            limits:
-              cpu: "50m"
-              memory: "32Mi"
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 1001
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop:
-                - ALL
-
-        - name: wait-for-kafka
-          image: busybox:1.36
-          imagePullPolicy: IfNotPresent
-          command:
-            - sh
-            - -c
-            - |
-              until nc -z kafka.ecp-prod.svc.cluster.local 9092; do
-                echo "Waiting for Kafka..."
-                sleep 3
-              done
-              echo "Kafka ready!"
-          resources:
-            requests:
-              cpu: "10m"
-              memory: "16Mi"
-            limits:
-              cpu: "50m"
-              memory: "32Mi"
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 1001
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop:
-                - ALL
-
         - name: wait-for-mongodb
           image: busybox:1.36
           imagePullPolicy: IfNotPresent
@@ -164,11 +108,41 @@ spec:
             - sh
             - -c
             - |
+              echo "Waiting for MongoDB..."
               until nc -z mongodb.ecp-prod.svc.cluster.local 27017; do
-                echo "Waiting for MongoDB..."
+                echo "MongoDB not ready, retrying in 3s..."
                 sleep 3
               done
-              echo "MongoDB ready!"
+              echo "MongoDB is ready."
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "16Mi"
+            limits:
+              cpu: "50m"
+              memory: "32Mi"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+        - name: wait-for-redis
+          image: busybox:1.36
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for Redis..."
+              until nc -z redis.ecp-prod.svc.cluster.local 6379; do
+                echo "Redis not ready, retrying in 3s..."
+                sleep 3
+              done
+              echo "Redis is ready."
           resources:
             requests:
               cpu: "10m"
@@ -186,8 +160,8 @@ spec:
                 - ALL
 
       containers:
-        - name: ecp-order
-          image: devkhim/ecp.order:prod.1.0.0
+        - name: ecp-product
+          image: devkhim/ecp.product:prod.1.0.0
           imagePullPolicy: Always
 
           ports:
@@ -203,29 +177,21 @@ spec:
             - name: DOTNET_GCConserveMemory
               value: "5"
 
-            # ── PostgreSQL ─────────────────────────────────────────────────
-            - name: ConnectionStrings__OrderConnections
-              valueFrom:
-                secretKeyRef:
-                  name: ecp-order-secrets
-                  key: postgres-connection
-
             # ── MongoDB ────────────────────────────────────────────────────
-            - name: ConnectionStrings__MongoDb
+            - name: MongoDB__ConnectionString
               valueFrom:
                 secretKeyRef:
-                  name: ecp-order-secrets
+                  name: ecp-product-secrets
                   key: mongo-connection
+            - name: MongoDB__Database
+              value: "product_service"
 
-            # ── Kafka ──────────────────────────────────────────────────────
-            - name: Kafka__BootstrapServers
-              value: "kafka.ecp-prod.svc.cluster.local:9092"
-
-            # ── Inter-service calls ────────────────────────────────────────
-            - name: Services__WarehouseUrl
-              value: "http://ecp-warehouse.ecp-prod.svc.cluster.local"
-            - name: Services__OrderAnalyserUrl
-              value: "http://ecp-order-analyser.ecp-prod.svc.cluster.local"
+            # ── Redis ──────────────────────────────────────────────────────
+            - name: Redis__ConnectionString
+              valueFrom:
+                secretKeyRef:
+                  name: ecp-product-secrets
+                  key: redis-connection
 
           resources:
             requests:
@@ -238,7 +204,7 @@ spec:
           # 30 × 5s = 150s max startup time
           startupProbe:
             httpGet:
-              path: /health
+              path: /health/live
               port: 8080
             failureThreshold: 30
             periodSeconds: 5
@@ -246,7 +212,7 @@ spec:
 
           readinessProbe:
             httpGet:
-              path: /health
+              path: /health/ready
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 10
@@ -256,7 +222,7 @@ spec:
 
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health/live
               port: 8080
             initialDelaySeconds: 20
             periodSeconds: 20
@@ -301,16 +267,16 @@ spec:
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: ecp-order-hpa
+  name: ecp-product-hpa
   namespace: ecp-prod
   labels:
-    app: ecp-order
+    app: ecp-product
 
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: ecp-order
+    name: ecp-product
 
   minReplicas: 2
   maxReplicas: 10
@@ -350,16 +316,16 @@ spec:
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: ecp-order-pdb
+  name: ecp-product-pdb
   namespace: ecp-prod
   labels:
-    app: ecp-order
+    app: ecp-product
 
 spec:
   minAvailable: 1
   selector:
     matchLabels:
-      app: ecp-order
+      app: ecp-product
 
 ---
 # ════════════════════════════════════════════════════════════════════════
@@ -368,24 +334,24 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: ecp-order-ingress
+  name: ecp-product-ingress
   namespace: ecp-prod
   labels:
-    app: ecp-order
+    app: ecp-product
     environment: production
   annotations:
     # ── YARP gateway discovery ─────────────────────────────────────────
     proxy.gateway/enabled:         "true"
-    proxy.gateway/route-path:      "/api/order/{**catch-all}"
-    proxy.gateway/destination-url: "http://ecp-order.ecp-prod.svc.cluster.local:80"
+    proxy.gateway/route-path:      "/api/product/{**catch-all}"
+    proxy.gateway/destination-url: "http://ecp-product.ecp-prod.svc.cluster.local:80"
     proxy.gateway/strip-prefix:    "true"
-    proxy.gateway/health-path:     "/health"
+    proxy.gateway/health-path:     "/health/ready"
 
     # ── CORS ───────────────────────────────────────────────────────────
-    nginx.ingress.kubernetes.io/enable-cors:          "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin:    "*"
-    nginx.ingress.kubernetes.io/cors-allow-methods:   "GET, POST, PUT, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers:   "DNT,X-CustomHeader,Keep-Alive,User-Agent,Authorization,Content-Type,X-Correlation-ID"
+    nginx.ingress.kubernetes.io/enable-cors:         "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin:   "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods:  "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers:  "DNT,X-CustomHeader,Keep-Alive,User-Agent,Authorization,Content-Type,X-Correlation-ID"
 
     # ── Timeouts & body size ───────────────────────────────────────────
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
@@ -398,10 +364,10 @@ spec:
     - host: api.notcode.uk
       http:
         paths:
-          - path: /api/order
+          - path: /api/product
             pathType: Prefix
             backend:
               service:
-                name: ecp-order
+                name: ecp-product
                 port:
                   number: 80
