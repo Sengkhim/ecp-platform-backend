@@ -4,7 +4,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: postgres-secrets
-  namespace: ecp-dev
+  namespace: ecp-prod
 type: Opaque
 stringData:
   postgres-password: "postgres"
@@ -15,7 +15,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgres
-  namespace: ecp-dev
+  namespace: ecp-prod
   labels:
     app: postgres
 spec:
@@ -67,7 +67,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres
-  namespace: ecp-dev 
+  namespace: ecp-prod
   labels:
     app: postgres
 spec:
