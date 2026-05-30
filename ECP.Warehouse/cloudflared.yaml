@@ -10,8 +10,8 @@ data:
     credentials-file: /etc/cloudflared/creds/credentials.json
 
     ingress:
-      - hostname: warehouse.notcode.uk
-        service: http://ecp-warehouse.ecp-prod.svc.cluster.local:80
+      - hostname: api.notcode.uk
+        service: http://api-gateway.ecp-prod.svc.cluster.local:80
       - service: http_status:404
 
 ---
