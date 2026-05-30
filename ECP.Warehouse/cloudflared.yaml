@@ -14,19 +14,39 @@ data:
     tunnel: 3f43823c-5712-411b-b4b3-f875e75ebf3d
     credentials-file: /etc/cloudflared/creds/credentials.json
 
-    ingress:
-      - hostname: warehouse.notcode.uk
-        service: http://ecp-warehouse.ecp-prod.svc.cluster.local:80
+    # Retry failed connections automatically
+    retries: 5
 
+    # Metrics server for health probes
+    metrics: 0.0.0.0:2000
+
+    ingress:
       - hostname: api.notcode.uk
         service: http://api-gateway.ecp-prod.svc.cluster.local:80
+        originRequest:
+          connectTimeout: 10s
+          noTLSVerify: false
 
       # catch-all — must always be last
       - service: http_status:404
 
 ---
 # ════════════════════════════════════════════════════════════════════════
+# ServiceAccount
+# ════════════════════════════════════════════════════════════════════════
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cloudflared
+  namespace: ecp-prod
+  labels:
+    app: cloudflared
+
+---
+# ════════════════════════════════════════════════════════════════════════
 # Deployment — cloudflared
+# High availability: 2 replicas, each opens independent tunnel connections
+# Cloudflare load balances across all active tunnel connections
 # ════════════════════════════════════════════════════════════════════════
 apiVersion: apps/v1
 kind: Deployment
@@ -37,10 +57,18 @@ metadata:
     app: cloudflared
 
 spec:
-  replicas: 1
+  replicas: 2
+  revisionHistoryLimit: 5
+
   selector:
     matchLabels:
       app: cloudflared
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0   # never drop all tunnel connections during update
+      maxSurge: 1
 
   template:
     metadata:
@@ -48,8 +76,20 @@ spec:
         app: cloudflared
 
     spec:
+      serviceAccountName: cloudflared
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 30
+
+      # Spread replicas across nodes when cluster grows
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: cloudflared
 
       containers:
         - name: cloudflared
@@ -60,15 +100,22 @@ spec:
             - tunnel
             - --config
             - /etc/cloudflared/config/config.yaml
+            - --metrics
+            - 0.0.0.0:2000
             - run
+
+          ports:
+            - name: metrics
+              containerPort: 2000
+              protocol: TCP
 
           resources:
             requests:
-              cpu: "100m"
+              cpu: "50m"
               memory: "64Mi"
             limits:
-              cpu: "500m"
-              memory: "256Mi"
+              cpu: "200m"
+              memory: "128Mi"
 
           livenessProbe:
             httpGet:
@@ -88,6 +135,24 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 3
 
+          lifecycle:
+            preStop:
+              exec:
+                # Drain in-flight requests before shutdown
+                command: ["/bin/sh", "-c", "sleep 5"]
+
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532   # cloudflared official non-root user
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop:
+                - ALL
+
           volumeMounts:
             - name: config
               mountPath: /etc/cloudflared/config
@@ -95,6 +160,8 @@ spec:
             - name: creds
               mountPath: /etc/cloudflared/creds
               readOnly: true
+            - name: tmp
+              mountPath: /tmp
 
       volumes:
         - name: config
@@ -103,3 +170,72 @@ spec:
         - name: creds
           secret:
             secretName: cloudflared-credentials
+        - name: tmp
+          emptyDir: {}
+
+---
+# ════════════════════════════════════════════════════════════════════════
+# Pod Disruption Budget — always keep 1 tunnel replica alive
+# ════════════════════════════════════════════════════════════════════════
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cloudflared-pdb
+  namespace: ecp-prod
+  labels:
+    app: cloudflared
+
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: cloudflared
+
+---
+# ════════════════════════════════════════════════════════════════════════
+# HorizontalPodAutoscaler — scale cloudflared under load
+# ════════════════════════════════════════════════════════════════════════
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cloudflared-hpa
+  namespace: ecp-prod
+  labels:
+    app: cloudflared
+
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cloudflared
+
+  minReplicas: 2
+  maxReplicas: 5   # each pod opens 4 connections to Cloudflare edge = 20 total at max
+
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30    # react quickly to traffic spikes
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 120   # wait 2min before removing tunnel pods
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
