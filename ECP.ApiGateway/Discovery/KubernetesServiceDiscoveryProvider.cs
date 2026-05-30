@@ -79,7 +79,7 @@ public sealed class KubernetesServiceDiscoveryProvider : IProxyConfigProvider, I
     {
         _k8S            = k8S;
         _logger         = logger;
-        _namespace      = configuration["Kubernetes:Namespace"] ?? "ecp-dev";
+        _namespace      = configuration["Kubernetes:Namespace"] ?? throw new ArgumentException("Kubernetes namespace is missing");
         _ingressBaseUrl = configuration["Kubernetes:IngressBaseUrl"];  // Optional fallback
 
         // Start with an empty snapshot — YARP subscribes to its ChangeToken.

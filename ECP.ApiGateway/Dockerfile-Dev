@@ -1,0 +1,22 @@
+﻿FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+
+COPY ../ECP.ApiGateway/*.csproj ./ECP.ApiGateway/
+RUN dotnet restore ./ECP.ApiGateway/ECP.ApiGateway.csproj
+
+COPY .. .
+
+WORKDIR /src/ECP.ApiGateway
+
+RUN dotnet build -c Debug -o /app/build
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0
+
+WORKDIR /app
+
+ENV ASPNETCORE_ENVIRONMENT=Development
+
+COPY --from=build /app/build .
+
+ENTRYPOINT ["dotnet", "ECP.ApiGateway.dll"]
