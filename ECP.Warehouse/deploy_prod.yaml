@@ -8,18 +8,29 @@ metadata:
   namespace: ecp-prod
   labels:
     app: ecp-warehouse
+    environment: production
 
 spec:
   type: ClusterIP
-
   selector:
     app: ecp-warehouse
-
   ports:
     - name: http
       port: 80
       targetPort: 8080
       protocol: TCP
+
+---
+# ════════════════════════════════════════════════════════════════════════
+# ServiceAccount
+# ════════════════════════════════════════════════════════════════════════
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ecp-warehouse
+  namespace: ecp-prod
+  labels:
+    app: ecp-warehouse
 
 ---
 # ════════════════════════════════════════════════════════════════════════
@@ -30,25 +41,23 @@ kind: Deployment
 metadata:
   name: ecp-warehouse
   namespace: ecp-prod
-
   labels:
     app: ecp-warehouse
     environment: production
 
 spec:
   replicas: 3
-
   revisionHistoryLimit: 5
-
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1
-      maxSurge: 1
 
   selector:
     matchLabels:
       app: ecp-warehouse
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
 
   template:
     metadata:
@@ -57,7 +66,19 @@ spec:
         environment: production
 
     spec:
-      terminationGracePeriodSeconds: 30
+      serviceAccountName: ecp-warehouse
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: ecp-warehouse
 
       containers:
         - name: ecp-warehouse
@@ -67,56 +88,79 @@ spec:
           ports:
             - containerPort: 8080
               name: http
+              protocol: TCP
 
           env:
             - name: ASPNETCORE_ENVIRONMENT
               value: "Production"
-
             - name: ASPNETCORE_URLS
               value: "http://+:8080"
+            - name: DOTNET_GCConserveMemory
+              value: "5"
 
           resources:
             requests:
               cpu: "250m"
               memory: "256Mi"
-
             limits:
               cpu: "1000m"
               memory: "1Gi"
-
-          readinessProbe:
-            httpGet:
-              path: /health/ready
-              port: 8080
-
-            initialDelaySeconds: 10
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
-
-          livenessProbe:
-            httpGet:
-              path: /health/live
-              port: 8080
-
-            initialDelaySeconds: 20
-            periodSeconds: 20
-            timeoutSeconds: 5
-            failureThreshold: 3
 
           startupProbe:
             httpGet:
               path: /health/live
               port: 8080
-
             failureThreshold: 30
             periodSeconds: 5
+            timeoutSeconds: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
 
           securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
             runAsNonRoot: true
             runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: app-logs
+              mountPath: /app/logs
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: app-logs
+          emptyDir: {}
 
       restartPolicy: Always
 
@@ -127,8 +171,10 @@ spec:
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: ecp-warehouse
+  name: ecp-warehouse-hpa
   namespace: ecp-prod
+  labels:
+    app: ecp-warehouse
 
 spec:
   scaleTargetRef:
@@ -143,10 +189,29 @@ spec:
     - type: Resource
       resource:
         name: cpu
-
         target:
           type: Utilization
           averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
 
 ---
 # ════════════════════════════════════════════════════════════════════════
@@ -155,12 +220,44 @@ spec:
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: ecp-warehouse
+  name: ecp-warehouse-pdb
   namespace: ecp-prod
+  labels:
+    app: ecp-warehouse
 
 spec:
-  minAvailable: 1
-
+  minAvailable: 2
   selector:
     matchLabels:
       app: ecp-warehouse
+
+---
+# ════════════════════════════════════════════════════════════════════════
+# Ingress — YARP route discovery via proxy.gateway annotations
+# ════════════════════════════════════════════════════════════════════════
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecp-warehouse-ingress
+  namespace: ecp-prod
+  labels:
+    app: ecp-warehouse
+  annotations:
+    proxy.gateway/enabled:         "true"
+    proxy.gateway/route-path:      "/api/warehouse/{**catch-all}"
+    proxy.gateway/destination-url: "http://ecp-warehouse.ecp-prod.svc.cluster.local:80"
+    proxy.gateway/strip-prefix:    "true"
+    proxy.gateway/health-path:     "/health/ready"
+
+spec:
+  rules:
+    - host: api.notcode.uk
+      http:
+        paths:
+          - path: /api/warehouse
+            pathType: Prefix
+            backend:
+              service:
+                name: ecp-warehouse
+                port:
+                  number: 80
