@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared-config
+  namespace: ecp-prod
+
+data:
+  config.yaml: |
+    tunnel: 3f43823c-5712-411b-b4b3-f875e75ebf3d
+    credentials-file: /etc/cloudflared/creds/credentials.json
+
+    ingress:
+      - hostname: warehouse.notcode.uk
+        service: http://ecp-warehouse.ecp-prod.svc.cluster.local:80
+      - service: http_status:404
+
+---
+# ════════════════════════════════════════════════════════════════════════
+# Deployment — cloudflared tunnel pod
+# ════════════════════════════════════════════════════════════════════════
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: ecp-prod
+
+  labels:
+    app: cloudflared
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: cloudflared
+
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:latest
+          imagePullPolicy: Always
+
+          args:
+            - tunnel
+            - --config
+            - /etc/cloudflared/config/config.yaml
+            - run
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          volumeMounts:
+            - name: config
+              mountPath: /etc/cloudflared/config
+              readOnly: true
+            - name: creds
+              mountPath: /etc/cloudflared/creds
+              readOnly: true
+
+      volumes:
+        - name: config
+          configMap:
+            name: cloudflared-config
+        - name: creds
+          secret:
+            secretName: cloudflared-credentials
