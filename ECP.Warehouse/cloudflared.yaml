@@ -92,3 +92,13 @@ spec:
         - name: creds
           secret:
             secretName: cloudflared-credentials
+  
+  
+#  sudo kubectl create secret generic cloudflared-credentials \
+#  --from-file=credentials.json=/home/binary/.cloudflared/3f43823c-5712-411b-b4b3-f875e75ebf3d.json \
+#  --namespace ecp-prod
+  
+#  sudo kubectl get secret cloudflared-credentials -n ecp-prod
+#  sudo kubectl rollout restart deployment/cloudflared -n ecp-prod
+#  cloudflared tunnel route dns ecp-platform api.notcode.uk
+
