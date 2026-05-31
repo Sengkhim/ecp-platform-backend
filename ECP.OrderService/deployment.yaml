@@ -186,7 +186,7 @@ spec:
 
       containers:
         - name: ecp-order
-          image: devkhim/ecp.order:prod.1.0.2
+          image: devkhim/ecp.order:prod.1.0.3
           imagePullPolicy: Always
 
           ports:
