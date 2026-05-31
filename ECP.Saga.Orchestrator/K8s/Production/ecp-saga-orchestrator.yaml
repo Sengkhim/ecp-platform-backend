@@ -161,7 +161,7 @@ spec:
 
       containers:
         - name: ecp-saga-orchestrator
-          image: devkhim/ecp.saga:prod.1.0.0
+          image: devkhim/ecp.saga.orchestrator:prod.1.0.0
           imagePullPolicy: Always
 
           ports:
@@ -283,3 +283,34 @@ spec:
   selector:
     matchLabels:
       app: ecp-saga-orchestrator
+
+---
+# ════════════════════════════════════════════════════════════════════════
+# Ingress — health check only, no public business routes
+# ════════════════════════════════════════════════════════════════════════
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecp-saga-orchestrator-ingress
+  namespace: ecp-prod
+  labels:
+    app: ecp-saga-orchestrator
+    environment: production
+  annotations:
+    proxy.gateway/enabled:         "true"
+    proxy.gateway/route-path:      "/api/saga/{**catch-all}"
+    proxy.gateway/destination-url: "http://ecp-saga-orchestrator.ecp-prod.svc.cluster.local:80"
+    proxy.gateway/strip-prefix:    "true"
+    proxy.gateway/health-path:     "/health"
+spec:
+  rules:
+    - host: api.notcode.uk
+      http:
+        paths:
+          - path: /api/saga
+            pathType: Prefix
+            backend:
+              service:
+                name: ecp-saga-orchestrator
+                port:
+                  number: 80
