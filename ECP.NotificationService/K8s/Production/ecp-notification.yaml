@@ -266,3 +266,34 @@ spec:
   selector:
     matchLabels:
       app: ecp-notification
+      
+ 
+# ════════════════════════════════════════════════════════════════════════
+# Ingress — YARP route discovery via proxy.gateway annotations
+# ════════════════════════════════════════════════════════════════════════     
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecp-notification-ingress
+  namespace: ecp-prod
+  labels:
+    app: ecp-notification
+  annotations:
+    proxy.gateway/enabled:         "true"
+    proxy.gateway/route-path:      "/api/notification/{**catch-all}"
+    proxy.gateway/destination-url: "http://ecp-notification.ecp-prod.svc.cluster.local:80"
+    proxy.gateway/strip-prefix:    "true"
+    proxy.gateway/health-path:     "/health"
+spec:
+  rules:
+    - host: api.notcode.uk
+      http:
+        paths:
+          - path: /api/notification
+            pathType: Prefix
+            backend:
+              service:
+                name: ecp-notification
+                port:
+                  number: 80
