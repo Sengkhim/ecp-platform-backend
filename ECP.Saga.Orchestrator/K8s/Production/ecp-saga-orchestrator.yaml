@@ -28,7 +28,7 @@ metadata:
 
 ---
 # ════════════════════════════════════════════════════════════════════════
-# Service — internal only, no gateway route needed
+# Service — internal only
 # ════════════════════════════════════════════════════════════════════════
 apiVersion: v1
 kind: Service
@@ -63,10 +63,6 @@ metadata:
     environment: production
 
 spec:
-  # !! IMPORTANT: Keep replicas at 1 for saga orchestrator
-  # Multiple replicas would cause race conditions on saga state in MongoDB.
-  # MassTransit handles concurrency via MongoDbConcurrencyException retries
-  # but a single instance is safer and simpler for production.
   replicas: 1
   revisionHistoryLimit: 5
 
@@ -91,17 +87,6 @@ spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
 
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                topologyKey: kubernetes.io/hostname
-                labelSelector:
-                  matchLabels:
-                    app: ecp-saga-orchestrator
-
-      # ── Wait for Kafka + MongoDB ───────────────────────────────────────
       initContainers:
         - name: wait-for-kafka
           image: busybox:1.36
@@ -161,7 +146,7 @@ spec:
 
       containers:
         - name: ecp-saga-orchestrator
-          image: devkhim/ecp.saga:prod.1.0.0
+          image: devkhim/ecp.saga:prod.1.0.1
           imagePullPolicy: Always
 
           ports:
@@ -175,20 +160,17 @@ spec:
             - name: ASPNETCORE_URLS
               value: "http://+:8080"
             - name: DOTNET_GCConserveMemory
-              value: "5"
+              value: "7"           # aggressive GC for low-memory node
 
-            # ── Kafka ──────────────────────────────────────────────────────
             - name: Kafka__BootstrapServers
               value: "kafka.ecp-prod.svc.cluster.local:9092"
 
-            # ── MongoDB saga state store ───────────────────────────────────
             - name: MongoDB__SagaConnection
               valueFrom:
                 secretKeyRef:
                   name: ecp-saga-secrets
                   key: mongo-saga-connection
 
-            # ── Downstream services ────────────────────────────────────────
             - name: Services__OrderUrl
               value: "http://ecp-order.ecp-prod.svc.cluster.local"
             - name: Services__PaymentUrl
@@ -200,13 +182,12 @@ spec:
 
           resources:
             requests:
-              cpu: "100m"
-              memory: "128Mi"
+              cpu: "50m"
+              memory: "64Mi"    # reduced for single-node
             limits:
               cpu: "300m"
               memory: "256Mi"
 
-          # 30 × 5s = 150s max startup time
           startupProbe:
             httpGet:
               path: /health
@@ -237,7 +218,6 @@ spec:
           lifecycle:
             preStop:
               exec:
-                # Allow in-flight saga transitions to complete before shutdown
                 command: ["/bin/sh", "-c", "sleep 15"]
 
           securityContext:
@@ -286,7 +266,7 @@ spec:
 
 ---
 # ════════════════════════════════════════════════════════════════════════
-# Ingress — health check only, no public business routes
+# Ingress — health check only
 # ════════════════════════════════════════════════════════════════════════
 apiVersion: networking.k8s.io/v1
 kind: Ingress
