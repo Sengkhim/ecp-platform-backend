@@ -161,7 +161,7 @@ spec:
 
       containers:
         - name: ecp-saga-orchestrator
-          image: devkhim/ecp.saga.orchestrator:prod.1.0.0
+          image: devkhim/ecp.saga:prod.1.0.0
           imagePullPolicy: Always
 
           ports:
