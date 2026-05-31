@@ -1,29 +1,40 @@
-﻿FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
-USER $APP_UID
-WORKDIR /app
-EXPOSE 8080
-
+﻿# =========================
+# BUILD STAGE
+# =========================
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-ARG BUILD_CONFIGURATION=Release
+
 WORKDIR /src
 
-# ✅ Paths now relative to parent folder (build context = ..)
-COPY ["ECP.OrderService/ECP.OrderService.csproj", "ECP.OrderService/"]
-COPY ["Contracts/Contracts.csproj", "Contracts/"]
+# Copy project files first for layer caching
+COPY ECP.OrderService/ECP.OrderService.csproj ECP.OrderService/
+COPY Contracts/Contracts.csproj Contracts/
 
-RUN dotnet restore "ECP.OrderService/ECP.OrderService.csproj"
+RUN dotnet restore ECP.OrderService/ECP.OrderService.csproj
 
-COPY ECP.OrderService/ ECP.OrderService/
-COPY Contracts/ Contracts/
+# Copy source code
+COPY . .
 
-WORKDIR "/src/ECP.OrderService"
-RUN dotnet build "./ECP.OrderService.csproj" -c $BUILD_CONFIGURATION -o /app/build
+WORKDIR /src/ECP.OrderService
 
-FROM build AS publish
-ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./ECP.OrderService.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish \
+    ECP.OrderService.csproj \
+    -c Release \
+    -o /app/publish \
+    --no-restore \
+    /p:UseAppHost=false
 
-FROM base AS final
+# =========================
+# RUNTIME STAGE
+# =========================
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+
 WORKDIR /app
-COPY --from=publish /app/publish .
+
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_ENVIRONMENT=Production
+
+EXPOSE 8080
+
+COPY --from=build /app/publish .
+
 ENTRYPOINT ["dotnet", "ECP.OrderService.dll"]

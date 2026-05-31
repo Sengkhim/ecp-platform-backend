@@ -1,0 +1,3 @@
+1. Build image => docker build -t ecp.order:prod.1.0.1 -f ECP.OrderService/Dockerfile .
+2. Create tage => docker tag ecp.order:prod.1.0.1 devkhim/ecp.order:prod.1.0.1
+3. Push image => docker push devkhim/ecp.order:prod.1.0.1
