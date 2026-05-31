@@ -1,0 +1,8 @@
+1. Build image:
+docker build -t ecp.notification:prod.1.0.0 --build-arg ASPNETCORE_ENVIRONMENT=Production -f ECP.PaymentService/Dockerfile .
+
+2. Create tage:
+docker tag ecp.notification:prod.1.0.0 devkhim/ecp.notification:prod.1.0.0
+
+3. Push image:
+docker push devkhim/ecp.notification:prod.1.0.0

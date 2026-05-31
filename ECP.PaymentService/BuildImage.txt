@@ -1,8 +1,8 @@
-1. Build image 
-- docker build -t ecp.payment:prod.1.0.0 --build-arg ASPNETCORE_ENVIRONMENT=Production -f ECP.PaymentService/Dockerfile .
+1. Build image:
+docker build -t ecp.payment:prod.1.0.0 --build-arg ASPNETCORE_ENVIRONMENT=Production -f ECP.PaymentService/Dockerfile .
 
-2. Create tage 
-- docker tag ecp.payment:prod.1.0.0 devkhim/ecp.payment:prod.1.0.0
+2. Create tage:
+docker tag ecp.payment:prod.1.0.0 devkhim/ecp.payment:prod.1.0.0
 
-3. Push image 
- - docker push devkhim/ecp.payment:prod.1.0.0
+3. Push image:
+docker push devkhim/ecp.payment:prod.1.0.0

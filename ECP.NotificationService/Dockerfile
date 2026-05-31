@@ -1,24 +1,42 @@
-﻿FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
-USER $APP_UID
+﻿# =========================
+# BUILD STAGE
+# =========================
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+
+WORKDIR /src
+
+# Copy project files first for Docker cache
+COPY ECP.NotificationService/ECP.NotificationService.csproj ECP.NotificationService/
+COPY Contracts/Contracts.csproj Contracts/
+
+RUN dotnet restore ECP.NotificationService/ECP.NotificationService.csproj
+
+# Copy source code
+COPY . .
+
+WORKDIR /src/ECP.NotificationService
+
+RUN dotnet publish \
+    ECP.NotificationService.csproj \
+    -c Release \
+    -o /app/publish \
+    --no-restore \
+    /p:UseAppHost=false
+
+# =========================
+# RUNTIME STAGE
+# =========================
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+
 WORKDIR /app
+
+ENV ASPNETCORE_URLS=http://+:8080
+ARG ASPNETCORE_ENVIRONMENT=Production
+ENV ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+
 EXPOSE 8080
 EXPOSE 8081
 
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-ARG BUILD_CONFIGURATION=Release
-WORKDIR /src
-COPY ["ECP.NotificationService/ECP.NotificationService.csproj", "ECP.NotificationService/"]
-COPY ["Contracts/Contracts.csproj", "Contracts/"]
-RUN dotnet restore "ECP.NotificationService/ECP.NotificationService.csproj"
-COPY . .
-WORKDIR "/src/ECP.NotificationService"
-RUN dotnet build "./ECP.NotificationService.csproj" -c $BUILD_CONFIGURATION -o /app/build
+COPY --from=build /app/publish .
 
-FROM build AS publish
-ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./ECP.NotificationService.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
-
-FROM base AS final
-WORKDIR /app
-COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "ECP.NotificationService.dll"]
