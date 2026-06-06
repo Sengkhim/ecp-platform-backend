@@ -82,7 +82,7 @@ spec:
 
       containers:
         - name: ecp-warehouse
-          image: devkhim/epc.warehouse:v5
+          image: devkhim/epc.warehouse:v6
           imagePullPolicy: IfNotPresent
 
           ports:
@@ -155,7 +155,7 @@ spec:
               mountPath: /tmp
             - name: app-logs
               mountPath: /app/logs
-
+      
       volumes:
         - name: tmp
           emptyDir: {}
