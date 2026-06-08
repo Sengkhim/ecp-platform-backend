@@ -4,8 +4,10 @@ using ECP.ApiGateway.Application.Factory;
 using ECP.ApiGateway.Application.Health;
 using ECP.ApiGateway.Discovery;
 using k8s;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using Polly;
 using Yarp.ReverseProxy.Configuration;
 
 namespace ECP.ApiGateway.Extensions;
@@ -21,30 +23,64 @@ public static class ServiceCollectionExtensions
                 .AddCheck<KubernetesHealthCheck>("kubernetes", tags: ["ready"]);
         
             services.AddHttpClient();
-            services.AddOpenTelemetries();
+            // services.AddOpenTelemetries(configuration);
             services.ConfigureRateLimiting(configuration);
+            services.ConfigureResilience(configuration);     // ← new
+
             services.KubernetesConfiguration();
             services.ServiceDiscoveryConfigure();
             services.AddHostedService<YarpConfigVerifier>();
+            
+            var opts = services.GatewayOption(configuration);
+            if (opts.EnableResponseCompression)
+                services.AddResponseCompression();           // ← was missing
         }
 
-        private void AddOpenTelemetries()
-        {
-            services.AddOpenTelemetry()
-                .ConfigureResource(r => r.AddService(
-                    serviceName:    "api-gateway",
-                    serviceVersion: "1.0.0"))
-                .WithTracing(tracing => tracing
-                    .AddAspNetCoreInstrumentation(o =>
-                    {
-                        o.RecordException = true;
-                        o.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health")
-                                          && !ctx.Request.Path.StartsWithSegments("/debug");
-                    })
-                    .AddHttpClientInstrumentation()
-                    .AddConsoleExporter());
-        }
+        // private void AddOpenTelemetries()
+        // {
+        //     services.AddOpenTelemetry()
+        //         .ConfigureResource(r => r.AddService(
+        //             serviceName:    "api-gateway",
+        //             serviceVersion: "1.0.0"))
+        //         .WithTracing(tracing => tracing
+        //             .AddAspNetCoreInstrumentation(o =>
+        //             {
+        //                 o.RecordException = true;
+        //                 o.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health")
+        //                                   && !ctx.Request.Path.StartsWithSegments("/debug");
+        //             })
+        //             .AddHttpClientInstrumentation()
+        //             .AddConsoleExporter());
+        // }
 
+        // private void AddOpenTelemetries(IConfiguration configuration)
+        // {
+        //     var otlpEndpoint = configuration["OpenTelemetry:Endpoint"]
+        //                        ?? "http://localhost:4317";
+        //
+        //     services.AddOpenTelemetry()
+        //         .ConfigureResource(r => r.AddService(
+        //             serviceName:    "api-gateway",
+        //             serviceVersion: "1.0.0"))
+        //         .WithTracing(tracing => tracing
+        //             .AddAspNetCoreInstrumentation(o =>
+        //             {
+        //                 o.RecordException = true;
+        //                 o.Filter = ctx =>
+        //                     !ctx.Request.Path.StartsWithSegments("/health") &&
+        //                     !ctx.Request.Path.StartsWithSegments("/debug")  &&
+        //                     !ctx.Request.Path.StartsWithSegments("/metrics");
+        //             })
+        //             .AddHttpClientInstrumentation()
+        //             .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint)))
+        //         .WithMetrics(metrics => metrics
+        //             .AddAspNetCoreInstrumentation()
+        //             .AddHttpClientInstrumentation()
+        //             .AddRuntimeInstrumentation()
+        //             .AddMeter("ECP.ApiGateway")
+        //             .AddPrometheusExporter());
+        // }
+        
         public GatewayOptions GatewayOption(IConfiguration configuration)
         {
             services.Configure<GatewayOptions>(configuration.GetSection(GatewayOptions.Section));
@@ -111,6 +147,25 @@ public static class ServiceCollectionExtensions
             // Never call .LoadFromMemory() — it registers a conflicting provider.
             services.AddSingleton<KubernetesServiceDiscoveryProvider>();
             services.AddSingleton<IProxyConfigProvider>(sp => sp.GetRequiredService<KubernetesServiceDiscoveryProvider>());
+        }
+        
+        private void ConfigureResilience(IConfiguration configuration)
+        {
+            var opts = services.GatewayOption(configuration);
+
+            services.ConfigureHttpClientDefaults(http =>
+            {
+                http.AddStandardResilienceHandler(resilience =>
+                {
+                    resilience.TotalRequestTimeout.Timeout =
+                        TimeSpan.FromSeconds(opts.TimeoutSeconds);
+
+                    if (!opts.CircuitBreakerEnabled)
+                        resilience.CircuitBreaker.ShouldHandle =
+                            new PredicateBuilder<HttpResponseMessage>()
+                                .HandleResult(_ => false);  // disable: never trips
+                });
+            });
         }
     }
 }
